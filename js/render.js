@@ -1,7 +1,8 @@
 'use strict';
 /* 錦絵の描画エンジン：和紙・木目・摺りムラ・見当ずれを再現 */
 const R = (() => {
-  const M = 18, GW = 50, GH = 75, CELL = 8, MW = 100, MH = 150;
+  const M = 18, CELL = 8, NW = 160, NH = 160;
+  const dims = d => { const W = d.w || 400, H = d.h || 600; return { W, H, GW: W / CELL, GH: H / CELL }; };
   const FONT = '"Shippori Mincho","Hiragino Mincho ProN","Yu Mincho","YuMincho","Noto Serif JP",serif';
   const mk = U.canvas;
   const cache = new Map();
@@ -76,7 +77,7 @@ const R = (() => {
     if (noiseArr) return noiseArr;
     const r = U.rng(99);
     const lattice = (n) => {
-      const gw = Math.ceil(MW / n) + 2, gh = Math.ceil(MH / n) + 2;
+      const gw = Math.ceil(NW / n) + 2, gh = Math.ceil(NH / n) + 2;
       const L = new Float32Array(gw * gh).map(() => r());
       return (x, y) => {
         const fx = x / n, fy = y / n, ix = fx | 0, iy = fy | 0;
@@ -86,12 +87,13 @@ const R = (() => {
       };
     };
     const o1 = lattice(12), o2 = lattice(5), o3 = lattice(2);
-    noiseArr = new Float32Array(MW * MH);
-    for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) noiseArr[y * MW + x] = o1(x, y) * 0.5 + o2(x, y) * 0.3 + o3(x, y) * 0.2;
+    noiseArr = new Float32Array(NW * NH);
+    for (let y = 0; y < NH; y++) for (let x = 0; x < NW; x++) noiseArr[y * NW + x] = o1(x, y) * 0.5 + o2(x, y) * 0.3 + o3(x, y) * 0.2;
     return noiseArr;
   }
   /* ばれんの当たり具合（50x75グリッド）から摺りムラのマスクを作る */
-  function coverMask(cov) {
+  function coverMask(cov, GW, GH) {
+    const MW = GW * 2, MH = GH * 2;
     const c = mk(MW, MH), g = c.getContext('2d'), im = g.createImageData(MW, MH), N = noise();
     const at = (x, y) => Math.min(1, cov[U.clamp(y, 0, GH - 1) * GW + U.clamp(x, 0, GW - 1)]);
     for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) {
@@ -99,7 +101,7 @@ const R = (() => {
       const ix = Math.floor(gx), iy = Math.floor(gy), tx = gx - ix, ty = gy - iy;
       const v = U.lerp(U.lerp(at(ix, iy), at(ix + 1, iy), tx), U.lerp(at(ix, iy + 1), at(ix + 1, iy + 1), tx), ty);
       const i = y * MW + x;
-      im.data[i * 4 + 3] = U.smooth(0.3, 0.8, v + (N[i] - 0.5) * 0.5) * 255;
+      im.data[i * 4 + 3] = U.smooth(0.3, 0.8, v + (N[y * NW + x] - 0.5) * 0.5) * 255;
     }
     g.putImageData(im, 0, 0);
     return c;
@@ -113,8 +115,9 @@ const R = (() => {
     } else g.fillStyle = hex;
     g.fill(region.path);
   }
-  function colorLayer(region, hex, S) {
-    const c = mk(400 * S, 600 * S), g = c.getContext('2d');
+  function colorLayer(d, region, hex, S) {
+    const { W, H } = dims(d);
+    const c = mk(W * S, H * S), g = c.getContext('2d');
     g.setTransform(S, 0, 0, S, 0, 0);
     fillRegion(g, region, hex);
     return c;
@@ -134,18 +137,21 @@ const R = (() => {
     [...text].forEach((ch, i) => g.fillText(ch, x, y + i * step));
   }
   function cartoucheBox(d) {
-    const n = [...d.title].length;
-    return { x: d.cartouche.x, y: d.cartouche.y, w: 30, h: n * 22 + 16 };
+    const cols = d.cartoucheCols || [d.title];
+    const size = cols.length > 1 ? 14 : 19, step = size + 3;
+    const n = Math.max(...cols.map(c => [...c].length));
+    return { x: d.cartouche.x, y: d.cartouche.y, w: cols.length * (size + 6) + 10, h: n * step + 16, cols, size, step };
   }
   /* 主版（墨線）：絵師の筆跡 + 彫りの出来 */
   function keyLayer(d, st, S, opt = {}) {
-    const c = mk(400 * S, 600 * S), g = c.getContext('2d');
+    const { W, H } = dims(d), ink = PIG[d.keyColor || 'sumi'].hex;
+    const c = mk(W * S, H * S), g = c.getContext('2d');
     g.setTransform(S, 0, 0, S, 0, 0);
-    g.strokeStyle = g.fillStyle = PIG.sumi.hex; g.lineCap = g.lineJoin = 'round';
-    g.lineWidth = 2.4; g.strokeRect(1.5, 1.5, 397, 597);
+    g.strokeStyle = g.fillStyle = ink; g.lineCap = g.lineJoin = 'round';
+    g.lineWidth = 2.4; g.strokeRect(1.5, 1.5, W - 3, H - 3);
     st.strokes.forEach((s, si) => {
       const q = s.line >= 0 && st.carve[s.line] ? st.carve[s.line].q : 0.85;
-      drawStroke(g, s, PIG.sumi.hex, 0.9, q, si * 977 + 13);
+      drawStroke(g, s, ink, 0.9, q, si * 977 + 13);
     });
     g.lineWidth = 1.3; d.autoPaths.forEach(p => g.stroke(p));
     (d.keyFillPaths || []).forEach(p => g.fill(p));
@@ -153,26 +159,28 @@ const R = (() => {
       const b = cartoucheBox(d);
       g.lineWidth = 1.6; g.strokeRect(b.x, b.y, b.w, b.h);
       g.lineWidth = 0.7; g.strokeRect(b.x + 3, b.y + 3, b.w - 6, b.h - 6);
-      vtext(g, d.title, b.x + b.w / 2, b.y + 9, 19, 22);
+      b.cols.forEach((col, k) => vtext(g, col, b.x + b.w - 5 - (b.size + 6) * (k + 0.5) - (b.cols.length > 1 ? 0 : 0), b.y + 9, b.size, b.step));
     }
-    if (opt.sign) vtext(g, opt.sign + '画', d.sign.x, d.sign.y, 15, 17);
+    if (opt.sign) vtext(g, signText(d, opt.sign), d.sign.x, d.sign.y, 15, 17);
     return c;
   }
+  const signText = (d, name) => d.artistSign || (name + '画');
   function strength(res) { return res.amount < 0.42 ? 0.5 + 0.5 * (res.amount / 0.42) : 1; }
-  function finish(c, res) {
+  function finish(c, res, d) {
+    const { GW, GH } = dims(d);
     const g = c.getContext('2d');
     g.setTransform(1, 0, 0, 1, 0, 0);
     const ex =Math.max(0, res.amount - 0.58) / 0.42;
     if (ex > 0.02) {
       const copy = mk(c.width, c.height); copy.getContext('2d').drawImage(c, 0, 0);
-      const k = c.width / 400 * 2.2 * ex;
+      const k = c.width / dims(d).W * 2.2 * ex;
       g.globalAlpha = 0.3 * ex;
       [[1, 0], [-1, 0], [0, 1], [0, -1], [0.7, 0.7], [-0.7, -0.7]].forEach(([x, y]) => g.drawImage(copy, x * k, y * k));
       g.globalAlpha = 1;
     }
     g.globalCompositeOperation = 'destination-in';
     g.imageSmoothingEnabled = true;
-    g.drawImage(coverMask(res.cov), 0, 0, c.width, c.height);
+    g.drawImage(coverMask(res.cov, GW, GH), 0, 0, c.width, c.height);
     const lack = Math.max(0, 0.42 - res.amount) / 0.42;
     g.globalCompositeOperation = 'destination-out';
     g.globalAlpha = 0.1 + 0.5 * lack;
@@ -199,7 +207,7 @@ const R = (() => {
 
   /* 一枚の錦絵を摺り上げる */
   function render(d, st, opt) {
-    const S = opt.S, W = Math.round((400 + 2 * M) * S), H = Math.round((600 + 2 * M) * S);
+    const S = opt.S, { W: DW, H: DH } = dims(d), W = Math.round((DW + 2 * M) * S), H = Math.round((DH + 2 * M) * S);
     const out = mk(W, H), o = out.getContext('2d');
     o.drawImage(paper(W, H), 0, 0);
     const upto = opt.upto ?? st.blocks.length - 1;
@@ -208,7 +216,7 @@ const R = (() => {
       const res = st.results[i];
       if (i > upto || !res || res.amount == null) return;
       if (b.kind === 'key') { keyIdx = i; return; }
-      const c = finish(colorLayer(b.region, PIG[st.colors[b.region.id]].hex, S), res);
+      const c = finish(colorLayer(d, b.region, PIG[st.colors[b.region.id]].hex, S), res, d);
       o.globalAlpha = strength(res);
       o.drawImage(c, (M + res.dx) * S, (M + res.dy) * S);
       o.globalAlpha = 1;
@@ -218,7 +226,7 @@ const R = (() => {
       o.save(); o.translate((M + res.dx) * S, (M + res.dy) * S); o.scale(S, S);
       o.fillStyle = 'rgba(238,214,128,0.9)'; o.fillRect(bx.x, bx.y, bx.w, bx.h);
       o.restore();
-      const k = finish(keyLayer(d, st, S, { sign: opt.sign }), res);
+      const k = finish(keyLayer(d, st, S, { sign: opt.sign }), res, d);
       o.globalCompositeOperation = 'multiply'; o.globalAlpha = strength(res) * 0.96;
       o.drawImage(k, (M + res.dx) * S, (M + res.dy) * S);
       o.globalCompositeOperation = 'source-over'; o.globalAlpha = 1;
@@ -226,10 +234,10 @@ const R = (() => {
     o.globalAlpha = 0.45; o.drawImage(fibers(W, H, 17, 0.6), 0, 0); o.globalAlpha = 1;
     if (opt.sign) {
       o.save(); o.translate(M * S, M * S); o.scale(S, S);
-      const n = [...(opt.sign + '画')].length;
+      const n = [...signText(d, opt.sign)].length;
       seal(o, d.sign.x - 8, d.sign.y + n * 17 + 4, 16, [...opt.sign][0] || '印');
       const bx = cartoucheBox(d);
-      kiwame(o, bx.x - 12, bx.y + bx.h - 8);
+      if (d.kiwame) kiwame(o, d.kiwame.x, d.kiwame.y); else kiwame(o, bx.x - 12, bx.y + bx.h - 8);
       o.restore();
     }
     return out;
@@ -237,6 +245,7 @@ const R = (() => {
 
   /* 版木ごとの摺り範囲（ばれん判定用） */
   function blockMask(d, st, block) {
+    const { W, H, GW, GH } = dims(d);
     const c = mk(GW, GH), g = c.getContext('2d');
     g.scale(1 / CELL, 1 / CELL);
     g.fillStyle = g.strokeStyle = '#000';
@@ -244,7 +253,7 @@ const R = (() => {
       g.lineWidth = 10; g.lineCap = 'round';
       st.strokes.forEach(s => { g.beginPath(); s.pts.forEach((p, i) => i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y)); g.stroke(); });
       d.autoPaths.forEach(p => g.stroke(p));
-      g.strokeRect(4, 4, 392, 592);
+      g.strokeRect(4, 4, W - 8, H - 8);
     } else g.fill(block.region.path);
     const data = g.getImageData(0, 0, GW, GH).data, mask = new Uint8Array(GW * GH);
     let n = 0;
@@ -253,8 +262,8 @@ const R = (() => {
   }
   function blockContent(d, st, block, S) {
     if (block.kind === 'key') return keyLayer(d, st, S, { cartouche: true });
-    return colorLayer(block.region, PIG[st.colors[block.region.id]].hex, S);
+    return colorLayer(d, block.region, PIG[st.colors[block.region.id]].hex, S);
   }
 
-  return { M, GW, GH, CELL, FONT, paper, wood, fibers, render, blockMask, blockContent, drawStroke, fillRegion };
+  return { M, CELL, dims, FONT, paper, wood, fibers, render, blockMask, blockContent, drawStroke, fillRegion };
 })();

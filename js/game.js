@@ -1,7 +1,9 @@
 'use strict';
 (() => {
-  const VW = 460, VH = 660, OX = 30, OY = 30;
-  const { GW, GH, CELL, M } = R;
+  const OX = 30, OY = 30;
+  const { CELL, M } = R;
+  let W = 400, H = 600, VW = 460, VH = 660, GW = 50, GH = 75;
+  function setDims(d) { ({ W, H, GW, GH } = R.dims(d)); VW = W + 2 * OX; VH = H + 2 * OY; PAPER.w = W + 2 * M; PAPER.h = H + 2 * M; cv.parentElement.style.setProperty('--ar', VW / VH); resize(); }
   const $ = s => document.querySelector(s);
   const cv = $('#cv'), ctx = cv.getContext('2d'), panel = $('#panel');
   const hitCtx = document.createElement('canvas').getContext('2d');
@@ -9,6 +11,7 @@
   const G = { design: null, st: null, stageName: null, stage: null, finalCv: null };
   window.UKIYOE = G;
   const STEPS = ['shitae', 'irosashi', 'hori', 'suri', 'rakkan'];
+  const PAPER = { x: -M, y: -M, w: 400 + 2 * M, h: 600 + 2 * M };
 
   /* ───────── 共通 ───────── */
   function resize() {
@@ -48,7 +51,7 @@
   }
   const bgPaper = g => g.drawImage(texPaper, -OX, -OY, VW, VH);
   const bgWood = g => g.drawImage(texWood, -OX, -OY, VW, VH);
-  const mirror = g => { g.translate(400, 0); g.scale(-1, 1); };
+  const mirror = g => { g.translate(W, 0); g.scale(-1, 1); };
 
   function prepDesign(d) {
     if (d._prep) return;
@@ -64,9 +67,10 @@
   }
   function newState(d) {
     return {
-      strokes: [], cov: d.lines.map(l => new Uint8Array(l.samples.length)), errSum: 0, errN: 0,
+      strokes: [], hist: [], devSum: 0, devN: 0,
+      ink: d.lines.map(l => { const n = l.samples.length; return { cov: new Uint8Array(n), w: new Float32Array(n), ox: new Float32Array(n), oy: new Float32Array(n) }; }),
       colors: Object.fromEntries(d.regions.map(r => [r.id, r.color])),
-      carve: d.lines.map(() => ({ k: 0, done: false, chips: [], slips: 0, q: 1 })),
+      carve: d.lines.map(() => ({ k: 0, pos: 0, done: false, chips: [], q: 1, knot: null })),
       blocks: buildBlocks(d), results: [], scores: {}, name: '', blockScores: [],
     };
   }
@@ -74,66 +78,88 @@
     const st = newState(d);
     st.strokes = d.lines.map((l, i) => ({ line: i, pts: l.samples.map(p => ({ x: p.x, y: p.y, w: 2.4 })) }));
     st.carve.forEach(c => { c.done = true; c.q = 1; });
-    st.results = st.blocks.map(() => ({ amount: 0.5, dx: 0, dy: 0, cov: new Float32Array(GW * GH).fill(1.2) }));
+    const dm = R.dims(d);
+    st.results = st.blocks.map(() => ({ amount: 0.5, dx: 0, dy: 0, cov: new Float32Array(dm.GW * dm.GH).fill(1.2) }));
     return st;
   }
   function drawStroke(g, s, color, wk = 1) { R.drawStroke(g, s, color, wk); }
 
-  /* ───────── 壱：版下絵（絵師） ───────── */
-  const TCOV = 8;
-  function markCov(x, y) {
-    const d = G.design, st = G.st; let minD = 1e9;
-    d.lines.forEach((l, i) => {
-      const s = l.samples, c = st.cov[i];
-      for (let j = 0; j < s.length; j++) {
-        const dx = s[j].x - x, dy = s[j].y - y, dd = dx * dx + dy * dy;
-        if (dd < minD) minD = dd;
-        if (dd < TCOV * TCOV) c[j] = 1;
+  /* ───────── 壱：版下絵（絵師） ─────────
+     指を線の近くに置いて動かすと、筆が線に吸い付いて描ける */
+  const SNAP = 24, PICK = 36;
+  let cur = null;
+  const inkOf = i => G.st.ink[i];
+  const lineRatio = i => { const c = inkOf(i).cov; let n = 0; for (const v of c) n += v; return n / c.length; };
+  const lineDone = i => lineRatio(i) >= 0.999;
+  function nearestLine(p) {
+    let best = -1, bd = PICK * PICK;
+    G.design.lines.forEach((l, i) => {
+      if (lineDone(i)) return;
+      l.samples.forEach(s => { const dd = (s.x - p.x) ** 2 + (s.y - p.y) ** 2; if (dd < bd) { bd = dd; best = i; } });
+    });
+    return best;
+  }
+  function inkAt(i, p, w) {
+    const l = G.design.lines[i], ink = inkOf(i); let minD = 1e9;
+    l.samples.forEach((s, j) => {
+      const dx = p.x - s.x, dy = p.y - s.y, dd = Math.hypot(dx, dy);
+      if (dd < minD) minD = dd;
+      if (dd < SNAP && !ink.cov[j]) {
+        ink.cov[j] = 1; ink.w[j] = w;
+        ink.ox[j] = U.clamp(dx * 0.05, -0.9, 0.9); ink.oy[j] = U.clamp(dy * 0.05, -0.9, 0.9);
       }
     });
-    st.errSum += Math.min(Math.sqrt(minD), 25); st.errN++;
+    G.st.devSum += Math.min(minD, 30); G.st.devN++;
   }
-  const lineRatio = i => { const c = G.st.cov[i]; let n = 0; for (const v of c) n += v; return n / c.length; };
-  const LINE_OK = 0.86;
-  function recomputeCov() {
-    const st = G.st; st.cov.forEach(c => c.fill(0)); st.errSum = 0; st.errN = 0;
-    st.strokes.forEach(s => s.pts.forEach(p => markCov(p.x, p.y)));
+  function autoFill(i) {
+    const ink = inkOf(i); let sw = 0, n = 0;
+    ink.cov.forEach((c, j) => { if (c) { sw += ink.w[j]; n++; } });
+    const mw = n ? sw / n : 2.6;
+    ink.cov.forEach((c, j) => { if (!c) { ink.cov[j] = 1; ink.w[j] = mw; } });
   }
-  function assignLine(stroke) {
-    const d = G.design, votes = new Array(d.lines.length).fill(0);
-    stroke.pts.forEach(p => {
-      let best = -1, bd = 15 * 15;
-      d.lines.forEach((l, i) => l.samples.forEach(s => { const dd = (s.x - p.x) ** 2 + (s.y - p.y) ** 2; if (dd < bd) { bd = dd; best = i; } }));
-      if (best >= 0) votes[best]++;
+  function buildStrokes() {
+    G.st.strokes = G.design.lines.map((l, i) => {
+      const ink = inkOf(i), s = l.samples, n = s.length;
+      const closed = U.dist(s[0], s[n - 1]) < 2;
+      return { line: i, pts: s.map((p, j) => {
+        let w = ink.w[j] || 2.6;
+        if (!closed) w *= Math.min(1, 0.45 + Math.min(j, n - 1 - j) * 0.18);
+        return { x: p.x + ink.ox[j], y: p.y + ink.oy[j], w };
+      }) };
     });
-    const m = Math.max(...votes); return m > 0 ? votes.indexOf(m) : -1;
   }
   function shitaeScore() {
-    const d = G.design, st = G.st;
-    const avg = d.lines.reduce((a, _, i) => a + lineRatio(i), 0) / d.lines.length;
-    const me = st.errN ? st.errSum / st.errN : 10;
-    const acc = U.clamp(1 - (me - 2.5) / 12, 0.4, 1);
-    return Math.round(100 * Math.min(1, avg / 0.95) * acc);
+    const me = G.st.devN ? G.st.devSum / G.st.devN : 10;
+    return Math.round(100 * U.clamp(1 - (me - 5) / 22, 0.5, 1));
   }
-  let cur = null;
+  function drawInk(g, i, color) {
+    const s = G.design.lines[i].samples, ink = inkOf(i);
+    g.strokeStyle = color; g.lineCap = 'round';
+    for (let j = 1; j < s.length; j++) {
+      if (!ink.cov[j] || !ink.cov[j - 1]) continue;
+      g.lineWidth = (ink.w[j] + ink.w[j - 1]) / 2;
+      g.beginPath(); g.moveTo(s[j - 1].x + ink.ox[j - 1], s[j - 1].y + ink.oy[j - 1]); g.lineTo(s[j].x + ink.ox[j], s[j].y + ink.oy[j]); g.stroke();
+    }
+  }
   const stages = {};
   stages.shitae = {
     enter() { cur = null; this.panel(); },
     panel() {
-      const d = G.design, n = d.lines.length, done = d.lines.filter((_, i) => lineRatio(i) >= LINE_OK).length;
+      const d = G.design, n = d.lines.length, done = d.lines.filter((_, i) => lineDone(i)).length;
       panel.innerHTML = head('絵師', '壱', '版下絵', 'はんしたえ') + `
-        <p>浮世絵はまず<b>絵師</b>が墨一色で線画を描きます。薄い美濃紙に描かれた「版下絵」はそのまま版木に貼られて彫られるため、<b>絵師の筆跡がそのまま版画の線</b>になります。</p>
-        <p class="howto">青い点線を筆でなぞりましょう。なぞり終えた線は朱に変わります。丁寧にゆっくり描くと線に抑揚が生まれます。</p>
+        <p>浮世絵はまず<b>絵師</b>が墨一色で線画を描きます。この「版下絵」はそのまま版木に貼られて彫られるため、<b>絵師の筆跡がそのまま版画の線</b>になります。</p>
+        <p class="howto">青い点線の近くを指（マウス）でなぞるだけ。<b>筆が線に吸い付きます</b>。8割ほど描けば残りは自動で仕上がります。ゆっくり描くと太く、速く描くと細い線に。</p>
         <div class="meter"><div class="meter-fill" style="width:${done / n * 100}%"></div><span>線 ${done} / ${n}</span></div>
         <div class="controls">
-          <button class="btn" id="b-undo" ${G.st.strokes.length ? '' : 'disabled'}>一筆戻す</button>
-          <button class="btn" id="b-clear" ${G.st.strokes.length ? '' : 'disabled'}>描き直す</button>
+          <button class="btn" id="b-undo" ${G.st.hist.length ? '' : 'disabled'}>一本戻す</button>
+          <button class="btn" id="b-auto">お手本どおり描く</button>
           <button class="btn primary" id="b-next" ${done === n ? '' : 'disabled'}>色さしへ進む</button>
         </div>
+        ${d.artist ? `<p class="note">原画：${d.artist}『${d.series}』より。ゲーム用に線を簡略化しています。${d.note || ''}</p>` : ''}
         <div class="tip"><b>豆知識</b>版下絵は彫る時に版木ごと削られて失われます。そのため、浮世絵の肉筆の下絵はほとんど現存していません。</div>`;
-      $('#b-undo').onclick = () => { G.st.strokes.pop(); recomputeCov(); this.panel(); };
-      $('#b-clear').onclick = () => { G.st.strokes = []; recomputeCov(); this.panel(); };
-      $('#b-next').onclick = () => { G.st.scores.shitae = shitaeScore(); Sfx.play('done'); go('irosashi'); };
+      $('#b-undo').onclick = () => { const i = G.st.hist.pop(); const k = inkOf(i); k.cov.fill(0); k.w.fill(0); this.panel(); };
+      $('#b-auto').onclick = () => { G.design.lines.forEach((_, i) => { if (!lineDone(i)) { autoFill(i); G.st.hist.push(i); G.st.devSum += 12; G.st.devN++; } }); this.panel(); };
+      $('#b-next').onclick = () => { buildStrokes(); G.st.scores.shitae = shitaeScore(); Sfx.play('done'); go('irosashi'); };
     },
     draw(g) {
       const d = G.design;
@@ -141,39 +167,41 @@
       g.save(); g.globalAlpha = 0.12;
       d.regions.slice().sort((a, b) => a.z - b.z).forEach(r => R.fillRegion(g, r, PIG[r.color].hex));
       g.restore();
-      g.strokeStyle = 'rgba(60,90,140,0.3)'; g.lineWidth = 1; g.strokeRect(1.5, 1.5, 397, 597);
-      g.lineWidth = 1; g.setLineDash([]);
+      g.strokeStyle = 'rgba(60,90,140,0.3)'; g.lineWidth = 1; g.strokeRect(1.5, 1.5, W - 3, H - 3);
       g.strokeStyle = 'rgba(60,90,140,0.22)'; d.autoPaths.forEach(p => g.stroke(p));
       d.lines.forEach((l, i) => {
-        const ok = lineRatio(i) >= LINE_OK;
-        g.strokeStyle = ok ? 'rgba(200,68,47,0.4)' : 'rgba(40,80,150,0.75)';
-        g.lineWidth = ok ? 3 : 1.4; g.setLineDash(ok ? [] : [5, 4]); g.stroke(l.path);
+        if (lineDone(i)) return;
+        const active = cur && cur.line === i;
+        g.strokeStyle = active ? 'rgba(200,68,47,0.55)' : 'rgba(40,80,150,0.7)';
+        g.lineWidth = active ? 2 : 1.4; g.setLineDash([5, 4]); g.stroke(l.path);
       });
       g.setLineDash([]);
-      G.st.strokes.forEach(s => drawStroke(g, s, '#1d1a17'));
-      if (cur) drawStroke(g, cur, '#1d1a17');
+      d.lines.forEach((_, i) => drawInk(g, i, '#1d1a17'));
+      if (cur && cur.p) {
+        g.fillStyle = 'rgba(200,68,47,0.15)'; g.beginPath(); g.arc(cur.p.x, cur.p.y, SNAP, 0, 7); g.fill();
+      }
     },
-    down(p) { cur = { pts: [{ x: p.x, y: p.y, w: 1.2, t: p.t }], line: -1 }; markCov(p.x, p.y); },
+    down(p) {
+      const i = nearestLine(p);
+      if (i < 0) { toast('青い点線の近くから描き始めよう'); return; }
+      cur = { line: i, p, last: p, w: 2.6 };
+      inkAt(i, p, cur.w);
+    },
     move(p, down) {
       if (!cur || !down) return;
-      const last = cur.pts[cur.pts.length - 1];
-      const sx = last.x + (p.x - last.x) * 0.6, sy = last.y + (p.y - last.y) * 0.6;
-      const dd = Math.hypot(sx - last.x, sy - last.y);
-      if (dd < 1.2) return;
-      const v = dd / Math.max(1, p.t - last.t);
-      const wt = U.clamp(3.6 - v * 2.4, 1.2, 3.6);
-      cur.pts.push({ x: sx, y: sy, w: last.w + (wt - last.w) * 0.3, t: p.t });
-      markCov(sx, sy);
+      const dd = U.dist(p, cur.last); if (dd < 1) return;
+      const v = dd / Math.max(1, p.t - cur.last.t);
+      cur.w += (U.clamp(3.8 - v * 1.6, 1.6, 3.8) - cur.w) * 0.25;
+      inkAt(cur.line, p, cur.w);
+      cur.last = p; cur.p = p;
       Sfx.play('brush', 90);
     },
     up() {
       if (!cur) return;
-      const n = cur.pts.length;
-      for (let i = 0; i < Math.min(5, n); i++) cur.pts[n - 1 - i].w *= 0.45 + i * 0.11;
-      if (n > 2) { cur.line = assignLine(cur); G.st.strokes.push(cur); }
-      const before = G.design.lines.filter((_, i) => lineRatio(i) >= LINE_OK).length;
-      cur = null;
-      if (before === G.design.lines.length) toast('版下絵が描き上がった！', 'good');
+      const i = cur.line; cur = null;
+      if (lineRatio(i) > 0) { if (!G.st.hist.includes(i)) G.st.hist.push(i); }
+      if (lineRatio(i) >= 0.75 && !lineDone(i)) autoFill(i);
+      if (lineDone(i)) { Sfx.play('tap'); toast(G.design.lines.every((_, k) => lineDone(k)) ? '版下絵が描き上がった！' : `「${G.design.lines[i].name}」を描いた`, 'good'); }
       this.panel();
     },
   };
@@ -208,7 +236,7 @@
       bgPaper(g);
       d.regions.slice().sort((a, b) => a.z - b.z).forEach(r => { g.globalAlpha = 0.92; R.fillRegion(g, r, PIG[st.colors[r.id]].hex); });
       g.globalAlpha = 1;
-      g.strokeStyle = PIG.sumi.hex; g.lineWidth = 2.2; g.strokeRect(1.5, 1.5, 397, 597);
+      g.strokeStyle = PIG.sumi.hex; g.lineWidth = 2.2; g.strokeRect(1.5, 1.5, W - 3, H - 3);
       st.strokes.forEach(s => drawStroke(g, s, PIG.sumi.hex, 0.9));
       g.lineWidth = 1.2; d.autoPaths.forEach(p => g.stroke(p));
       if (selRegion) {
@@ -224,20 +252,31 @@
     },
   };
 
-  /* ───────── 参：彫り（彫師） ───────── */
-  const H = { carving: false, sp: 0, last: null, lastChip: 0, parts: [], msgT: 0 };
+  /* ───────── 参：彫り（彫師） ─────────
+     長押しで小刀が線に沿って進む。速すぎると線が欠ける。木の節では特に慎重に */
+  const VMAX = 90, SAFE = 48, SAFE_KNOT = 20;
+  const HR = { hold: false, v: 0, overT: 0, parts: [] };
   const curLine = () => G.st.carve.findIndex(c => !c.done);
+  function setupKnots() {
+    const r = U.rng(G.design.id.length * 131 + 7);
+    G.design.lines.forEach((l, i) => {
+      const c = G.st.carve[i], n = l.samples.length;
+      c.pos = c.pos || 0;
+      if (n >= 40 && !c.knot) { const len = Math.max(9, Math.round(n * 0.12)), a = Math.round(n * (0.3 + r() * 0.4)); c.knot = { a, b: Math.min(n - 2, a + len) }; }
+    });
+  }
+  const inKnot = c => c.knot && c.k >= c.knot.a - 2 && c.k <= c.knot.b;
   stages.hori = {
-    enter() { H.carving = false; H.parts = []; this.panel(); },
+    enter() { HR.hold = false; HR.v = 0; HR.parts = []; setupKnots(); this.panel(); },
     panel() {
       const d = G.design, st = G.st, n = d.lines.length, done = st.carve.filter(c => c.done).length;
       const chips = st.carve.reduce((a, c) => a + c.chips.length, 0);
       const li = curLine();
       panel.innerHTML = head('彫師', '参', '彫り', 'ほり') + `
         <p><b>彫師</b>は版下絵を裏返しにして山桜の版木に貼り、小刀で線の両側を彫り込んで<b>線だけを浮き上がらせ</b>ます。だから版木の絵は左右反転しています。</p>
-        <p class="howto">朱い印から線に沿って小刀を引きましょう。<b>速すぎると線が欠け</b>、線から外れると印から彫り直しです。</p>
+        <p class="howto">画面（またはSpaceキー）を<b>押している間、小刀が線に沿って進みます</b>。押し続けると加速し、<b>速すぎると線が欠けます</b>。茶色い<b>木の節</b>では特にゆっくり。押す・離すで速さを調整しましょう。</p>
         <div class="now">${li >= 0 ? `いま彫る線：<b>${d.lines[li].name}</b>` : '主版を彫り上げた！'}</div>
-        <div class="speed"><span>刃の速さ</span><div class="speed-bar"><div class="speed-zone"></div><div class="speed-fill" id="speed-fill"></div></div></div>
+        <div class="speed"><span>刃の速さ</span><div class="speed-bar"><div class="speed-zone" id="speed-zone"></div><div class="speed-fill" id="speed-fill"></div></div></div>
         <div class="meter"><div class="meter-fill" style="width:${done / n * 100}%"></div><span>線 ${done} / ${n}　欠け ${chips}</span></div>
         <div class="controls"><button class="btn primary" id="b-next" ${done === n ? '' : 'disabled'}>摺りへ進む</button></div>
         <div class="tip"><b>豆知識</b>美人画の生え際を彫る「毛割（けわり）」では、1ミリに3本もの髪の毛を彫り分けました。頭彫りは熟練の親方の仕事です。</div>`;
@@ -246,88 +285,100 @@
         Sfx.play('done'); go('suri');
       };
     },
+    update(dt) {
+      const li = curLine(); if (li < 0) { HR.v = 0; return; }
+      const c = G.st.carve[li], s = G.design.lines[li].samples, sec = dt / 1000;
+      HR.v = U.clamp(HR.v + (HR.hold ? 75 : -170) * sec, 0, VMAX);
+      if (HR.v <= 0) return;
+      const safe = inKnot(c) ? SAFE_KNOT : SAFE;
+      if (HR.v > safe) {
+        HR.overT += dt;
+        if (HR.overT > 170) {
+          c.chips.push({ ...s[Math.floor(c.pos)] }); HR.v *= 0.3; HR.overT = 0;
+          Sfx.play('chip'); toast(inKnot(c) ? '節で刃が跳ねた！ 線が欠けた' : '速すぎて線が欠けた！', 'bad');
+        }
+      } else HR.overT = Math.max(0, HR.overT - dt);
+      const before = Math.floor(c.pos);
+      c.pos = Math.min(s.length - 1, c.pos + HR.v * sec);
+      c.k = Math.floor(c.pos);
+      for (let j = before; j < c.k; j++) if (Math.random() < 0.6) HR.parts.push({ x: s[j].x, y: s[j].y, vx: (Math.random() - 0.5) * 0.15, vy: -Math.random() * 0.15, life: 600, s: 1.5 + Math.random() * 2 });
+      if (c.k > before) Sfx.play('carve', 60);
+      if (c.k >= s.length - 1) {
+        c.done = true; HR.v = 0; HR.hold = false; HR.overT = 0;
+        c.q = U.clamp(1 - 0.15 * c.chips.length, 0.3, 1);
+        Sfx.play('done');
+        toast(curLine() < 0 ? '主版を彫り上げた！ 色版は弟子たちが彫った' : `「${G.design.lines[li].name}」を彫り上げた`, 'good');
+        this.panel();
+      }
+    },
     draw(g, t, dt) {
+      this.update(dt);
       const d = G.design, st = G.st;
       bgWood(g);
       g.save(); mirror(g);
-      g.fillStyle = 'rgba(245,236,215,0.3)'; g.fillRect(0, 0, 400, 600);
+      g.fillStyle = 'rgba(245,236,215,0.3)'; g.fillRect(0, 0, W, H);
       st.strokes.forEach(s => drawStroke(g, s, 'rgba(40,28,20,0.5)'));
       g.lineCap = g.lineJoin = 'round';
       const carved = (path) => {
         g.strokeStyle = 'rgba(110,70,40,0.75)'; g.lineWidth = 8; g.stroke(path);
         g.strokeStyle = '#ecd2a8'; g.lineWidth = 2.4; g.stroke(path);
       };
-      g.strokeRect(1.5, 1.5, 397, 597);
       d.autoPaths.forEach(p => { g.strokeStyle = 'rgba(110,70,40,0.5)'; g.lineWidth = 5; g.stroke(p); g.strokeStyle = '#e6c99c'; g.lineWidth = 1.3; g.stroke(p); });
+      const li = curLine();
       d.lines.forEach((l, i) => {
-        const c = st.carve[i], k = c.done ? l.samples.length - 1 : c.k;
+        const c = st.carve[i], s = l.samples;
+        if (c.knot && !c.done) {
+          const m = s[Math.round((c.knot.a + c.knot.b) / 2)];
+          g.save(); g.translate(m.x, m.y);
+          for (let k = 4; k >= 1; k--) { g.fillStyle = k % 2 ? 'rgba(95,58,30,0.55)' : 'rgba(150,100,60,0.5)'; g.beginPath(); g.ellipse(0, 0, 4 + k * 3.2, 3 + k * 2, 0.4, 0, 7); g.fill(); }
+          g.restore();
+        }
+        const k = c.done ? s.length - 1 : c.k;
         if (k >= 1) {
-          const p = new Path2D(); l.samples.slice(0, k + 1).forEach((s, j) => j ? p.lineTo(s.x, s.y) : p.moveTo(s.x, s.y));
+          const p = new Path2D(); s.slice(0, k + 1).forEach((q, j) => j ? p.lineTo(q.x, q.y) : p.moveTo(q.x, q.y));
           carved(p);
         }
-        c.chips.forEach(ch => { g.fillStyle = '#4a2e1a'; g.beginPath(); g.arc(ch.x, ch.y, 2.6, 0, 7); g.fill(); });
+        c.chips.forEach(ch => { g.fillStyle = '#4a2e1a'; g.beginPath(); g.arc(ch.x, ch.y, 2.8, 0, 7); g.fill(); });
       });
-      const li = curLine();
       if (li >= 0) {
-        const l = d.lines[li], c = st.carve[li], s = l.samples;
-        g.setLineDash([4, 4]); g.strokeStyle = 'rgba(200,50,30,0.85)'; g.lineWidth = 1.4;
+        const c = st.carve[li], s = d.lines[li].samples;
+        g.setLineDash([4, 4]); g.strokeStyle = 'rgba(200,50,30,0.85)'; g.lineWidth = 1.6;
         g.beginPath(); s.slice(c.k).forEach((q, j) => j ? g.lineTo(q.x, q.y) : g.moveTo(q.x, q.y)); g.stroke(); g.setLineDash([]);
-        const a = s[c.k], b = s[Math.min(s.length - 1, c.k + 4)];
-        const pulse = 9 + Math.sin(t / 160) * 2.5;
-        g.fillStyle = H.carving ? 'rgba(200,50,30,0.35)' : 'rgba(200,50,30,0.7)';
-        g.beginPath(); g.arc(a.x, a.y, pulse, 0, 7); g.fill();
-        g.strokeStyle = '#fff'; g.lineWidth = 1.5; g.stroke();
+        if (c.knot) {
+          g.strokeStyle = 'rgba(230,120,20,0.95)'; g.lineWidth = 3.2;
+          g.beginPath(); s.slice(c.knot.a, c.knot.b + 1).forEach((q, j) => j ? g.lineTo(q.x, q.y) : g.moveTo(q.x, q.y)); g.stroke();
+        }
+        const a = s[c.k], b = s[Math.min(s.length - 1, c.k + 3)];
         const ang = Math.atan2(b.y - a.y, b.x - a.x);
-        g.save(); g.translate(a.x, a.y); g.rotate(ang); g.fillStyle = '#fff';
-        g.beginPath(); g.moveTo(16, 0); g.lineTo(9, -4); g.lineTo(9, 4); g.closePath(); g.fill(); g.restore();
+        g.save(); g.translate(a.x, a.y); g.rotate(ang);
+        const pulse = HR.hold ? 0 : Math.sin(t / 160) * 2;
+        g.fillStyle = 'rgba(200,50,30,0.25)'; g.beginPath(); g.arc(0, 0, 12 + pulse, 0, 7); g.fill();
+        g.fillStyle = '#d9dde0'; g.strokeStyle = '#555'; g.lineWidth = 0.8;
+        g.beginPath(); g.moveTo(0, 0); g.lineTo(-10, -5); g.lineTo(-10, 3); g.closePath(); g.fill(); g.stroke();
+        g.fillStyle = '#6b4a2a'; g.fillRect(-26, -4.5, 16, 7);
+        g.restore();
       }
-      H.parts = H.parts.filter(p => (p.life -= dt) > 0);
-      H.parts.forEach(p => {
+      HR.parts = HR.parts.filter(p => (p.life -= dt) > 0);
+      HR.parts.forEach(p => {
         p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 0.0006 * dt;
         g.fillStyle = `rgba(225,190,140,${p.life / 600})`; g.fillRect(p.x, p.y, p.s, p.s * 0.6);
       });
       g.restore();
-      const f = $('#speed-fill');
-      if (f) { H.sp *= 0.94; const v = U.clamp(H.sp / 0.7 * 75, 0, 100); f.style.width = v + '%'; f.classList.toggle('over', v > 75); }
-    },
-    down(p) {
-      const li = curLine(); if (li < 0) return;
-      const q = { x: 400 - p.x, y: p.y }, c = G.st.carve[li], s = G.design.lines[li].samples;
-      if (U.dist(q, s[c.k]) < 18) { H.carving = true; H.last = { ...q, t: p.t }; H.sp = 0; }
-      else toast('朱い印から彫り始めよう');
-    },
-    move(p, down) {
-      if (!H.carving || !down) return;
-      const li = curLine(); if (li < 0) return;
-      const q = { x: 400 - p.x, y: p.y }, c = G.st.carve[li], l = G.design.lines[li], s = l.samples;
-      const dt = Math.max(1, p.t - H.last.t), v = U.dist(q, H.last) / dt;
-      H.sp = H.sp * 0.7 + v * 0.3; H.last = { ...q, t: p.t };
-      if (H.sp > 0.7 && p.t - H.lastChip > 400) {
-        H.lastChip = p.t; c.chips.push({ ...s[c.k] }); Sfx.play('chip'); toast('速すぎて線が欠けた！', 'bad');
-      }
-      let best = -1, bd = 11;
-      for (let j = c.k; j < Math.min(s.length, c.k + 14); j++) { const dd = U.dist(q, s[j]); if (dd < bd) { bd = dd; best = j; } }
-      if (best > c.k) {
-        for (let j = c.k; j < best; j++) if (Math.random() < 0.5) H.parts.push({ x: s[j].x, y: s[j].y, vx: (Math.random() - 0.5) * 0.15, vy: -Math.random() * 0.15, life: 600, s: 1.5 + Math.random() * 2 });
-        c.k = best; Sfx.play('carve', 45);
-      } else if (best < 0 && U.dist(q, s[c.k]) > 24) {
-        H.carving = false; c.slips++; Sfx.play('chip'); toast('刃が線から外れた…印から彫り直し', 'bad');
-      }
-      if (c.k >= s.length - 2) {
-        c.done = true; c.k = s.length - 1; H.carving = false;
-        c.q = U.clamp(1 - 0.12 * c.chips.length - 0.06 * c.slips, 0.35, 1);
-        Sfx.play('done');
-        toast(curLine() < 0 ? '主版を彫り上げた！ 色版は弟子たちが彫った' : `「${l.name}」を彫り上げた`, 'good');
-        this.panel();
+      const f = $('#speed-fill'), z = $('#speed-zone');
+      if (f && li >= 0) {
+        const safe = inKnot(st.carve[li]) ? SAFE_KNOT : SAFE;
+        f.style.width = HR.v / VMAX * 100 + '%'; f.classList.toggle('over', HR.v > safe);
+        z.style.left = safe / VMAX * 100 + '%';
       }
     },
-    up() { H.carving = false; },
+    down() { if (curLine() >= 0) HR.hold = true; },
+    up() { HR.hold = false; },
+    key(e) { if (e.code === 'Space') { e.preventDefault(); if (e.type === 'keydown') this.down(); else this.up(); } },
   };
 
   /* ───────── 四：摺り（摺師） ───────── */
   const S = { i: 0, phase: 'paint', ph: 0, ox: 0, oy: 0, drag: null, hover: null, last: null, mask: null, content: null, tmp: null, covCv: null, covDirty: true, print: null, t0: 0, inkT: 0, prog: 0 };
   const RUB_R = 30, RUB_K = 0.0145;
-  const PAPER = { x: -M, y: -M, w: 400 + 2 * M, h: 600 + 2 * M };
   const blk = () => G.st.blocks[S.i];
   const resNow = () => G.st.results[S.i];
   function amountScore(a) { return U.clamp(1 - Math.max(0, Math.abs(a - 0.5) - 0.08) / 0.3, 0, 1); }
@@ -340,21 +391,21 @@
   const rubScore = mean => U.clamp((mean - 0.4) / 0.55, 0, 1);
   function drawKento(g) {
     g.fillStyle = '#5e3c22';
-    g.fillRect(392 + M - 18, 618, 30, 4); g.fillRect(418, 592, 4, 30);
-    g.fillRect(30, 618, 50, 4);
+    const X = W + M, Y = H + M;
+    g.fillRect(X - 26, Y, 30, 4); g.fillRect(X, Y - 26, 4, 30); g.fillRect(30, Y, 50, 4);
     g.fillStyle = '#e8cfa5';
-    g.fillRect(392 + M - 18, 618, 30, 1.2); g.fillRect(418, 592, 1.2, 30); g.fillRect(30, 618, 50, 1.2);
+    g.fillRect(X - 26, Y, 30, 1.2); g.fillRect(X, Y - 26, 1.2, 30); g.fillRect(30, Y, 50, 1.2);
   }
   function drawBlock(g, ink) {
     const b = blk(), d = G.design, st = G.st;
     bgWood(g);
     g.save(); mirror(g);
-    g.fillStyle = 'rgba(80,48,25,0.3)'; g.fillRect(0, 0, 400, 600);
+    g.fillStyle = 'rgba(80,48,25,0.3)'; g.fillRect(0, 0, W, H);
     if (b.kind === 'key') {
       const raised = (color, dx) => {
         g.save(); g.translate(dx, dx);
         st.strokes.forEach(s => drawStroke(g, s, color, 1.1));
-        g.strokeStyle = color; g.lineWidth = 1.6; d.autoPaths.forEach(p => g.stroke(p)); g.lineWidth = 2.6; g.strokeRect(1.5, 1.5, 397, 597);
+        g.strokeStyle = color; g.lineWidth = 1.6; d.autoPaths.forEach(p => g.stroke(p)); g.lineWidth = 2.6; g.strokeRect(1.5, 1.5, W - 3, H - 3);
         g.fillStyle = color; d.keyFillPaths.forEach(p => g.fill(p));
         g.restore();
       };
@@ -431,7 +482,7 @@
         <div class="controls"><button class="btn primary big" id="b-brush">刷毛を置く（Space）</button></div>
         ${S.i >= 1 ? '<div class="controls"><button class="btn ghost" id="b-deshi">残りの版を弟子に任せる</button></div>' : ''}`;
       if (S.phase === 'kento') body = `
-        <p class="howto">紙をドラッグして、紙の右下の角を<b>「鉤（かぎ）」</b>に、下の辺を<b>「引付（ひきつけ）」</b>にぴたりと合わせます（矢印キーで微調整）。</p>
+        <p class="howto">紙をドラッグして、右下の角を<b>「鉤（かぎ）」</b>に、下の辺を<b>「引付（ひきつけ）」</b>に合わせます。近づけると<b>ぴたりと吸い付きます</b>。</p>
         <canvas id="lens" class="lens" width="320" height="200"></canvas>
         <div class="controls"><button class="btn primary big" id="b-place">紙を置く</button></div>`;
       if (S.phase === 'baren') body = `
@@ -505,7 +556,7 @@
         if (lens) {
           const lg = lens.getContext('2d'), k = lens.width / 34;
           lg.setTransform(1, 0, 0, 1, 0, 0); lg.fillStyle = '#3a2a1c'; lg.fillRect(0, 0, lens.width, lens.height);
-          lg.setTransform(k, 0, 0, k, lens.width / 2 - 412 * k, lens.height / 2 - 612 * k);
+          lg.setTransform(k, 0, 0, k, lens.width / 2 - (W + M - 6) * k, lens.height / 2 - (H + M - 6) * k);
           drawBlock(lg, 1); drawPaper(lg, 0.88);
           lg.setTransform(1, 0, 0, 1, 0, 0);
           lg.fillStyle = '#fff'; lg.font = `14px ${R.FONT}`; lg.fillText('鉤（かぎ）拡大', 10, 20);
@@ -513,7 +564,7 @@
       } else if (S.phase === 'baren') {
         drawBlock(g, 1); drawPaper(g, 0.96);
         updateTmp();
-        g.save(); mirror(g); g.globalAlpha = 0.5; g.drawImage(S.tmp, 0, 0, 400, 600); g.restore();
+        g.save(); mirror(g); g.globalAlpha = 0.5; g.drawImage(S.tmp, 0, 0, W, H); g.restore();
         if (S.hover) {
           const h = S.hover;
           const gr = g.createRadialGradient(h.x - 8, h.y - 8, 4, h.x, h.y, RUB_R);
@@ -544,11 +595,12 @@
       S.hover = p;
       if (S.phase === 'kento' && S.drag && down) {
         S.ox = U.clamp(S.drag.ox + p.x - S.drag.sx, -60, 60); S.oy = U.clamp(S.drag.oy + p.y - S.drag.sy, -60, 30);
+        if (Math.hypot(S.ox, S.oy) < 3.5) { if (S.ox || S.oy) Sfx.play('tap', 300); S.ox = 0; S.oy = 0; }
       }
       if (S.phase === 'baren' && down && S.last) {
         const res = resNow(), L = U.dist(p, S.last), n = Math.max(1, Math.ceil(L / 4)), step = L / n;
         for (let k = 1; k <= n; k++) {
-          const x = 400 - U.lerp(S.last.x, p.x, k / n), y = U.lerp(S.last.y, p.y, k / n);
+          const x = W - U.lerp(S.last.x, p.x, k / n), y = U.lerp(S.last.y, p.y, k / n);
           const gx0 = Math.max(0, Math.floor((x - RUB_R) / CELL)), gx1 = Math.min(GW - 1, Math.floor((x + RUB_R) / CELL));
           const gy0 = Math.max(0, Math.floor((y - RUB_R) / CELL)), gy1 = Math.min(GH - 1, Math.floor((y + RUB_R) / CELL));
           for (let gy = gy0; gy <= gy1; gy++) for (let gx = gx0; gx <= gx1; gx++) {
@@ -562,6 +614,7 @@
     },
     up() { S.drag = null; S.last = null; },
     key(e) {
+      if (e.type !== 'keydown') return;
       if (S.phase === 'paint' && (e.code === 'Space' || e.code === 'Enter')) { e.preventDefault(); this.brush(); }
       if (S.phase === 'kento') {
         const m = { ArrowLeft: [-0.5, 0], ArrowRight: [0.5, 0], ArrowUp: [0, -0.5], ArrowDown: [0, 0.5] }[e.code];
@@ -590,7 +643,9 @@
   }
   stages.rakkan = {
     enter() {
-      G.signed = false; G.sealT = 0;
+      G.signed = false; G.sealT = 0; G.compare = false;
+      const d = G.design;
+      if (d.original && !d._orig) { d._orig = new Image(); d._orig.src = d.original; }
       G.finalCv = R.render(G.design, G.st, { S: 2 });
       this.panel();
     },
@@ -598,7 +653,7 @@
       const st = G.st;
       if (!G.signed) {
         panel.innerHTML = head('絵師', '伍', '落款', 'らっかん') + `
-          <p>全ての版を摺り終えました。最後に絵師の<b>雅号（ペンネーム）</b>を入れ、印を押して仕上げます。</p>
+          <p>全ての版を摺り終えました。${G.design.artistSign ? `北斎の署名「${G.design.artistSign}」は主版に彫られています。最後に<b>あなたの号</b>で摺師の印を押して仕上げます。` : '最後に絵師の<b>雅号（ペンネーム）</b>を入れ、印を押して仕上げます。'}</p>
           <label class="field">雅号<input id="i-name" maxlength="4" value="${esc(st.name || NAMES[Math.random() * NAMES.length | 0])}"></label>
           <div class="controls"><button class="btn" id="b-rand">別の号</button><button class="btn primary big" id="b-sign">落款を押す</button></div>
           <div class="tip"><b>豆知識</b>題名の入った枠を「題箋（だいせん）」、丸い「極（きわめ）」の印は幕府の検閲を通った証の改印です。</div>`;
@@ -621,6 +676,8 @@
           <button class="btn primary" id="b-save">画像を保存</button>
           <button class="btn" id="b-gal">画廊に飾る</button>
         </div>
+        ${G.design.original ? `<div class="controls"><button class="btn compare" id="b-cmp">${G.compare ? '自分の作品に戻す' : `${G.design.artist}の原画と比べる`}</button></div>
+        <p class="note">${G.design.credit}</p>` : ''}
         <div class="controls">
           <button class="btn" id="b-again">増し摺り（同じ版木でもう一枚）</button>
           <button class="btn" id="b-home">別の画題を選ぶ</button>
@@ -633,6 +690,7 @@
       };
       $('#b-gal').onclick = (e) => { if (saveGallery({ total, rank })) { e.target.disabled = true; e.target.textContent = '画廊に飾った'; toast('画廊に飾りました', 'good'); } };
       $('#b-again').onclick = () => go('suri');
+      const cmp = $('#b-cmp'); if (cmp) cmp.onclick = () => { G.compare = !G.compare; Sfx.play('paper'); this.panel(); };
       $('#b-home').onclick = () => toTitle();
     },
     sign() {
@@ -647,9 +705,18 @@
       g.fillStyle = '#2b2622'; g.fillRect(-OX, -OY, VW, VH);
       const p = G.signed ? U.clamp((performance.now() - G.sealT) / 500, 0, 1) : 1;
       const sc = 1 + (1 - p) * 0.04;
-      g.save(); g.translate(200, 300); g.scale(sc, sc); g.translate(-200, -300);
+      g.save(); g.translate(W / 2, H / 2); g.scale(sc, sc); g.translate(-W / 2, -H / 2);
       g.shadowColor = 'rgba(0,0,0,0.6)'; g.shadowBlur = 24; g.shadowOffsetY = 8;
-      g.drawImage(G.finalCv, PAPER.x, PAPER.y, PAPER.w, PAPER.h);
+      const o = G.design._orig;
+      if (G.compare && o && o.complete && o.naturalWidth) {
+        g.fillStyle = '#efe4cc'; g.fillRect(PAPER.x, PAPER.y, PAPER.w, PAPER.h);
+        g.shadowColor = 'transparent'; g.drawImage(o, 0, 0, W, H);
+        const cap = '原画：' + G.design.artist + '（メトロポリタン美術館蔵）';
+        g.font = `11px ${R.FONT}`; const tw = g.measureText(cap).width + 12;
+        g.fillStyle = 'rgba(36,32,29,0.85)'; g.fillRect(W - tw, H + 1, tw, 16);
+        g.fillStyle = '#f1e6cf'; g.textAlign = 'right'; g.textBaseline = 'middle';
+        g.fillText(cap, W - 6, H + 9);
+      } else g.drawImage(G.finalCv, PAPER.x, PAPER.y, PAPER.w, PAPER.h);
       g.restore();
     },
   };
@@ -692,24 +759,26 @@
     G.stage = null; setStep(null); show('screen-title');
   }
   function buildTitle() {
-    const box = $('#design-list');
-    box.innerHTML = DESIGNS.map((d, i) => `<article class="card">
+    const card = (d, i) => `<article class="card ${d.w > (d.h || 600) ? 'wide' : ''}">
       <div class="thumb"><img alt="${d.title}の完成見本" data-i="${i}"></div>
-      <div class="card-body"><h3>${d.title}<small>${d.yomi}</small></h3><p>${d.desc}</p>
-      <div class="lv">難しさ ${'★'.repeat(d.level)}${'☆'.repeat(3 - d.level)}　${d.lines.length}本の線・${d.regions.length + 1}版</div>
-      <button class="btn primary" data-start="${i}">この画題で始める</button></div></article>`).join('');
-    box.querySelectorAll('[data-start]').forEach(b => b.onclick = () => start(+b.dataset.start));
+      <div class="card-body">${d.artist ? `<div class="badge">${d.artist}『${d.series}』</div>` : ''}<h3>${d.title}<small>${d.yomi}</small></h3><p>${d.desc}</p>
+      <div class="lv">難しさ ${'★'.repeat(d.level)}${'☆'.repeat(3 - d.level)}　${d.lines.length}本の線・${d.regions.length + 1}版${d.w > (d.h || 600) ? '・横大判' : ''}</div>
+      <button class="btn primary" data-start="${i}">この画題で始める</button></div></article>`;
+    const box = $('#design-list'), box2 = $('#design-list-orig');
+    box2.innerHTML = DESIGNS.map((d, i) => d.artist ? card(d, i) : '').join('');
+    box.innerHTML = DESIGNS.map((d, i) => d.artist ? '' : card(d, i)).join('');
+    document.querySelectorAll('[data-start]').forEach(b => b.onclick = () => start(+b.dataset.start));
     DESIGNS.forEach((d, i) => {
       setTimeout(() => {
         prepDesign(d);
         const c = R.render(d, idealState(d), { S: 0.7 });
-        box.querySelector(`img[data-i="${i}"]`).src = c.toDataURL('image/jpeg', 0.85);
+        document.querySelector(`img[data-i="${i}"]`).src = c.toDataURL('image/jpeg', 0.85);
       }, 30 + i * 60);
     });
   }
   function start(i) {
     Sfx.init();
-    G.design = DESIGNS[i]; prepDesign(G.design);
+    G.design = DESIGNS[i]; prepDesign(G.design); setDims(G.design);
     G.st = newState(G.design);
     go('shitae');
   }
@@ -732,8 +801,10 @@
   const endP = e => { if (!pDown) return; pDown = false; G.stage?.up?.(pt(e)); };
   cv.addEventListener('pointerup', endP);
   cv.addEventListener('pointercancel', endP);
+  cv.addEventListener('contextmenu', e => e.preventDefault());
   cv.addEventListener('pointerleave', () => { if (G.stageName === 'suri') S.hover = null; });
-  document.addEventListener('keydown', e => { if (e.target.tagName !== 'INPUT') G.stage?.key?.(e); });
+  document.addEventListener('keydown', e => { if (e.target.tagName !== 'INPUT' && !e.repeat) G.stage?.key?.(e); });
+  document.addEventListener('keyup', e => { if (e.target.tagName !== 'INPUT') G.stage?.key?.(e); });
 
   let lastT = 0;
   function loop(t) {
@@ -759,5 +830,5 @@
   requestAnimationFrame(loop);
 
   /* 自動テスト用 */
-  G._debug = { go, start, idealState, stages, S, apprentice };
+  G._debug = { go, start, idealState, stages, S, HR, apprentice };
 })();

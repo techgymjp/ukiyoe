@@ -78,7 +78,7 @@ body[data-screen="screen-title"] .steps, body[data-screen="screen-gallery"] .ste
 /* 作業画面 */
 #screen-work.active { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; padding: 12px 16px; height: calc(100vh - var(--hdr)); height: calc(100dvh - var(--hdr)); }
 .stage-wrap { position: relative; display: grid; place-items: center; min-height: 0; height: 100%; }
-#cv { display: block; touch-action: none; border-radius: 4px; box-shadow: 0 6px 24px rgba(40,25,10,.35); cursor: crosshair; }
+#cv { display: block; touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; border-radius: 4px; box-shadow: 0 6px 24px rgba(40,25,10,.35); cursor: crosshair; }
 #toast { position: absolute; top: 14px; left: 50%; transform: translate(-50%, -10px); opacity: 0; pointer-events: none;
   background: rgba(36,32,29,.9); color: var(--paper); padding: 8px 18px; border-radius: 20px; font-size: 16px; font-weight: 700; transition: .2s; white-space: nowrap; }
 #toast.show { opacity: 1; transform: translate(-50%, 0); }
@@ -167,7 +167,7 @@ body[data-screen="screen-title"] .steps, body[data-screen="screen-gallery"] .ste
   .steps li span { font-size: 11px; }
   .steps li.active { font-size: 12px; gap: 4px; padding: 3px 8px; }
   #screen-work.active { grid-template-columns: 1fr; grid-template-rows: auto auto; height: auto; padding: 8px 10px 24px; gap: 10px; }
-  .stage-wrap { height: 64vh; height: 64dvh; }
+  .stage-wrap { height: 64vh; height: min(64dvh, calc((100vw - 20px) / var(--ar, 0.7))); }
   .panel { overflow: visible; }
   .flow li { min-width: 0; flex: 1 1 40%; }
 }
@@ -175,3 +175,11 @@ body[data-screen="screen-title"] .steps, body[data-screen="screen-gallery"] .ste
   .btn.small { padding: 4px 7px; }
   .brand-text { display: none; }
 }
+
+/* 北斎・横大判 */
+.badge { align-self: flex-start; font-size: 12px; color: #fff8ec; background: var(--ai); padding: 1px 8px; border-radius: 3px; }
+#design-list-orig { grid-template-columns: repeat(auto-fill, minmax(min(100%, 440px), 1fr)); }
+.card.wide .thumb { aspect-ratio: 3 / 2.15; }
+.note { font-size: 12px; color: var(--ink2); line-height: 1.6; }
+.btn.compare { background: var(--ai); border-color: var(--ai); color: #fff8ec; }
+.btn.compare:hover:not(:disabled) { background: #16294a; }
