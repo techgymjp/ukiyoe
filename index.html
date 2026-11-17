@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>浮世絵職人</title>
+<meta name="description" content="絵師・彫師・摺師の工程をなぞって、一枚の錦絵（浮世絵）を摺り上げるWEBゲーム。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body data-screen="screen-title">
+<header class="topbar">
+  <button class="brand" id="btn-home" title="表題へ"><span class="brand-seal">浮</span><span class="brand-text">浮世絵職人</span></button>
+  <ol class="steps" id="steps">
+    <li><span>壱</span>下絵</li>
+    <li><span>弐</span>色さし</li>
+    <li><span>参</span>彫り</li>
+    <li><span>四</span>摺り</li>
+    <li><span>伍</span>落款</li>
+  </ol>
+  <div class="top-actions">
+    <button class="btn small" id="btn-gallery">画廊</button>
+    <button class="btn small" id="btn-sound" aria-pressed="true">音 有</button>
+  </div>
+</header>
+
+<main>
+  <section id="screen-title" class="screen">
+    <div class="hero">
+      <h1><span>浮</span><span>世</span><span>絵</span><span>職</span><span>人</span></h1>
+      <p class="lead">絵師が描き、彫師が彫り、摺師が摺る。<br>江戸の職人たちの技をなぞって、あなただけの一枚の錦絵を仕上げよう。</p>
+      <ol class="flow">
+        <li><b>壱 版下絵</b><span>絵師</span>筆で線をなぞる</li>
+        <li><b>弐 色さし</b><span>絵師</span>色を指定する</li>
+        <li><b>参 彫り</b><span>彫師</span>小刀で版木を彫る</li>
+        <li><b>四 摺り</b><span>摺師</span>色版を摺り重ねる</li>
+        <li><b>伍 落款</b><span>絵師</span>雅号と印で仕上げ</li>
+      </ol>
+    </div>
+    <h2 class="sec">画題を選ぶ</h2>
+    <div id="design-list" class="cards"></div>
+    <footer class="foot">絵はすべてこのゲームのための創作図案です。マウス・タッチ操作に対応。</footer>
+  </section>
+
+  <section id="screen-work" class="screen">
+    <div class="stage-wrap"><canvas id="cv"></canvas><div id="toast"></div></div>
+    <aside id="panel" class="panel"></aside>
+  </section>
+
+  <section id="screen-gallery" class="screen">
+    <div class="gal-head"><h2 class="sec">画廊</h2><button class="btn" id="btn-gallery-back">表題へ戻る</button></div>
+    <div id="gallery-list" class="gallery"></div>
+  </section>
+</main>
+<div id="viewer"><img alt="作品"></div>
+
+<script src="js/util.js"></script>
+<script src="js/designs.js"></script>
+<script src="js/render.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>
