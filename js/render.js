@@ -121,14 +121,23 @@ const R = (() => {
     if (!d.raster) return Promise.resolve();
     if (d._rs) return d._rs;
     const load = src => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error(src)); i.src = src; });
-    d._rs = Promise.all([load(d.raster.image), load(d.raster.labels)]).then(([img, lab]) => {
+    const files = [load(d.raster.image), load(d.raster.labels)];
+    if (d.raster.layers) files.push(load(d.raster.layers));
+    d._rs = Promise.all(files).then(([img, lab, lay]) => {
       const w = lab.naturalWidth, h = lab.naturalHeight;
       const ic = mk(w, h), ig = ic.getContext('2d'); ig.drawImage(img, 0, 0, w, h);
       const lc = mk(w, h), lg = lc.getContext('2d'); lg.drawImage(lab, 0, 0);
       const ld = lg.getImageData(0, 0, w, h).data, labels = new Uint8Array(w * h);
       for (let i = 0; i < w * h; i++) labels[i] = Math.round(ld[i * 4] / 30);
       const im = ig.getImageData(0, 0, w, h);   // assets/fresh：tools/freshen.py で摺りたての色に修復済み
-      d._ras = { w, h, labels, img: im, canvas: ic, plates: {}, sil: {} };
+      // 色版の彫り範囲（tools/layers.py）：下地の版は上に重なる版の下まで広く彫ってある。ビット k = ラベル k+2
+      let layers = null;
+      if (lay) {
+        const yc = mk(w, h), yg = yc.getContext('2d'); yg.drawImage(lay, 0, 0);
+        const yd = yg.getImageData(0, 0, w, h).data; layers = new Uint8Array(w * h);
+        for (let i = 0; i < w * h; i++) layers[i] = yd[i * 4];
+      }
+      d._ras = { w, h, labels, layers, img: im, canvas: ic, plates: {}, sil: {} };
     });
     return d._rs;
   }
@@ -136,9 +145,18 @@ const R = (() => {
   function plate(d, label) {
     const r = d._ras;
     if (!r.plates[label]) {
-      const c = mk(r.w, r.h), g = c.getContext('2d'), im = g.createImageData(r.w, r.h);
-      for (let i = 0; i < r.w * r.h; i++) if (r.labels[i] === label) {
-        im.data[i * 4] = r.img.data[i * 4]; im.data[i * 4 + 1] = r.img.data[i * 4 + 1]; im.data[i * 4 + 2] = r.img.data[i * 4 + 2]; im.data[i * 4 + 3] = 255;
+      const c = mk(r.w, r.h), g = c.getContext('2d'), im = g.createImageData(r.w, r.h), n = r.w * r.h;
+      const bit = label >= 2 && r.layers ? 1 << (label - 2) : 0;
+      // 下に敷く部分（上の版に隠れる所）は、この版の絵の具の色（自分の色の所の平均）で摺られる
+      let mr = 0, mg = 0, mb = 0, mc = 0;
+      if (bit) for (let i = 0; i < n; i++) if (r.labels[i] === label) { mr += r.img.data[i * 4]; mg += r.img.data[i * 4 + 1]; mb += r.img.data[i * 4 + 2]; mc++; }
+      mc = Math.max(1, mc); mr /= mc; mg /= mc; mb /= mc;
+      for (let i = 0; i < n; i++) {
+        const own = r.labels[i] === label;
+        if (!own && !(bit && (r.layers[i] & bit))) continue;
+        if (own) { im.data[i * 4] = r.img.data[i * 4]; im.data[i * 4 + 1] = r.img.data[i * 4 + 1]; im.data[i * 4 + 2] = r.img.data[i * 4 + 2]; }
+        else { im.data[i * 4] = mr; im.data[i * 4 + 1] = mg; im.data[i * 4 + 2] = mb; }
+        im.data[i * 4 + 3] = 255;
       }
       g.putImageData(im, 0, 0); r.plates[label] = c;
     }
@@ -267,8 +285,10 @@ const R = (() => {
     o.drawImage(paper(W, H, d.raster ? FRESH_PAPER : d.paper), 0, 0);
     const upto = opt.upto ?? st.blocks.length - 1;
     let keyIdx = -1;
-    st.blocks.forEach((b, i) => {
-      const res = st.results[i];
+    // 摺った順番に重ねる（下の版を後から摺ると、上の版が隠れる）
+    const order = opt.order || st.blocks.map((_, i) => i);
+    order.forEach(i => {
+      const b = st.blocks[i], res = st.results[i];
       if (i > upto || !res || res.amount == null) return;
       if (b.kind === 'key') { keyIdx = i; return; }
       const c = finish(colorLayer(d, b.region, regionHex(b.region), S), res, d);

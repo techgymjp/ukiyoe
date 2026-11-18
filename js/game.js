@@ -111,10 +111,21 @@
   function renderPicked(S, extra = -1) {
     const st = G.st, saved = st.results;
     st.results = saved.map((r, i) => (P.picked.includes(i) || i === extra) ? r : undefined);
-    const c = R.render(G.design, st, { S });
+    const order = extra >= 0 ? P.picked.concat(extra) : P.picked;   // 摺った順番に重ねる
+    const c = R.render(G.design, st, { S, order });
     st.results = saved;
     return c;
   }
+  /* 摺る順番の決まり：主版（墨線）が最初。色版は、その下に敷かれる色版（after）を摺り終えていれば摺れる
+     （下の版を後から摺ると、上の版が隠れてしまう。tools/layers.py で作品ごとに求めて検証済み） */
+  function canPrint(k, picked = P.picked) {
+    if (picked.includes(k)) return false;
+    if (k === 0) return picked.length === 0;
+    if (!picked.includes(0)) return false;
+    const under = G.st.blocks[k].region.after || [];
+    return under.every(lab => picked.includes(G.st.blocks.findIndex(b => b.region && b.region.label === lab)));
+  }
+  const nextValid = () => G.st.blocks.findIndex((_, k) => canPrint(k));
   /* 版木カード：彫り下げた所は暗く、浮き出た版の形は明るい木の縁と影で立体的に */
   function thumbs(d, st) {
     if (d._thumbs) return d._thumbs;
@@ -178,7 +189,7 @@
     const k = cs[P.view];
     if (P.pickFor !== P.picked.length) { P.pickFor = P.picked.length; P.pickT0 = performance.now(); }
     P.preview = k;
-    panel.innerHTML = `<p class="howto">第<b>${P.picked.length + 1}</b>版 / 全${n}版：<b>次に摺る版</b>はどれ？<br><small>めくると、摺った時の色が紙にうっすら映ります。主版が最初、色は薄い→濃い。</small></p>
+    panel.innerHTML = `<p class="howto">第<b>${P.picked.length + 1}</b>版 / 全${n}版：<b>次に摺る版</b>はどれ？<br><small>めくると、摺った時の色が紙にうっすら映ります。主版が最初。色版は、ほかの版の下に敷かれる版から。</small></p>
       <div class="ptime"><div id="pk-time"></div><span id="pk-bonus"></span></div>
       <div class="cand">
         <button class="cand-nav" id="b-prev" aria-label="前の版" ${cs.length < 2 ? 'disabled' : ''}>◀</button>
@@ -228,8 +239,11 @@
     P.picked.push(k); P.rubs.push(mean);
     P.base = renderPicked(1);
     Sfx.play('paper');
-    if (k !== P.expect) { gameOver(); return; }
-    P.expect++;
+    P.picked.pop();
+    const ok = canPrint(k);
+    P.picked.push(k);
+    if (!ok) { gameOver(); return; }
+    P.expect = nextValid();
     G.combo++;
     const bonus = Math.round(P.pickBonus * (1 + Math.min(G.combo - 1, 10) * 0.1));
     G.total += bonus; P.bonusSum = (P.bonusSum || 0) + bonus; stageBar();
@@ -244,7 +258,7 @@
     G.total += score; stageBar();
     fx(perfect ? 'PERFECT!' : 'CLEAR!', perfect ? `見事！ ${score}点` : `${score}点　ムラなく摺れば満点`, perfect);
     Sfx.play('fanfare');
-    P.finalCv = R.render(G.design, G.st, { S: 2 });
+    P.finalCv = R.render(G.design, G.st, { S: 2, order: P.picked });
     saveGallery(score);
     const last = G.idx + 1 >= STAGES.length;
     panel.innerHTML = `<div class="role"><span class="role-seal">完</span>第${G.idx + 1}図 クリア</div>
@@ -270,7 +284,7 @@
     Sfx.play('bad');
     const th = thumbs(G.design, G.st);
     panel.innerHTML = `<div class="role"><span class="role-seal">終</span>${G.design.title}</div>
-      <p class="howto">版の順番がちがいました。正しい順番は：</p>
+      <p class="howto">下に敷く版より先に、上の版を摺ってしまいました。正しい順番の例：</p>
       <div class="blocks answer">${G.st.blocks.map((b, k) => `<div class="blockcard"><img src="${th[k]}" alt=""><span>${k + 1}番目</span></div>`).join('')}</div>
       <div class="controls"><button class="btn primary big" id="b-retry">この図からやり直す</button></div>
       <div class="controls"><button class="btn" id="b-share">シェア</button><button class="btn" id="b-title">タイトルへ</button></div>`;
