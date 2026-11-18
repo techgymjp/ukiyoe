@@ -84,59 +84,86 @@
   function drawStroke(g, s, color, wk = 1) { R.drawStroke(g, s, color, wk); }
 
   /* ───────── ひとなで：全工程共通の操作 ─────────
-     画面をひとなですると作業が進み、指を離しても自動で最後まで仕上がって次の工程へ進む */
-  const SW = { prog: 0, last: null, good: 0, n: 0, auto: false, done: false, started: false, hand: 0, finger: null };
-  const NEED = 520, AUTO_RATE = 0.9;            // 必要ななで距離（画面単位）・離した後の自動進行（/秒）
-  const V_LO = 0.2, V_HI = 1.9;                 // 丁寧ななでの速さ（画面単位/ms）
-  function swipeReset() { Object.assign(SW, { prog: 0, last: null, good: 0, n: 0, auto: false, done: false, started: false, hand: 0, finger: null }); }
-  const swipeQ = () => SW.n ? SW.good / SW.n : 0.8;
+     各工程で「お手本」を1本だけ示し、それを一筆でなぞる。
+     なぞった分だけ作業が進み、指を離しても自動で仕上がって次の工程へ進む。
+     お手本に正確に沿っていれば PERFECT！ */
+  const SW = { guide: [], cov: null, devSum: 0, devN: 0, len: 0, prog: 0, last: null, started: false, auto: false, done: false, finger: null, curDev: 0 };
+  const COVER_R = 22, AUTO_RATE = 0.9;
+  function swipeReset(guide) {
+    Object.assign(SW, { guide, cov: new Uint8Array(guide.length), devSum: 0, devN: 0, len: 0, prog: 0, last: null, started: false, auto: false, done: false, finger: null, curDev: 0 });
+  }
+  const covFrac = () => { let n = 0; for (const v of SW.cov) n += v; return n / SW.cov.length; };
+  const meanDev = () => SW.devN ? SW.devSum / SW.devN : 99;
+  const swipeQ = () => covFrac() * U.clamp(1 - (meanDev() - 6) / 24, 0, 1);
+  const tracePerfect = () => covFrac() >= 0.9 && meanDev() <= 9;
   const qScore = q => Math.round(60 + 40 * U.clamp(q, 0, 1));
-  /* 戻り値：この移動での速さ（u/ms）。進捗は SW.prog に加算 */
+  function markTrace(p) {
+    let best = 1e9;
+    SW.guide.forEach((s, j) => { const d = Math.hypot(s.x - p.x, s.y - p.y); if (d < best) best = d; if (d < COVER_R) SW.cov[j] = 1; });
+    SW.curDev = best; SW.devSum += Math.min(best, 40); SW.devN++;
+    SW.prog = Math.max(SW.prog, covFrac());
+  }
+  /* p はお手本と同じ座標系。戻り値：この移動での速さ（u/ms） */
   function swipeMove(p, down) {
     SW.finger = p;
-    if (!down || SW.done) return 0;
-    if (!SW.last) { SW.last = p; SW.started = true; return 0; }
-    const dd = U.dist(p, SW.last), dt = Math.max(1, p.t - SW.last.t);
-    if (dd < 0.5) return 0;
-    const v = dd / dt;
-    SW.n++; if (v >= V_LO && v <= V_HI) SW.good++;
-    SW.prog = Math.min(1, SW.prog + dd / NEED);
-    SW.last = p;
+    if (!down || SW.done || SW.auto) return 0;
+    if (!SW.last) { SW.last = p; SW.started = true; markTrace(p); return 0.001; }
+    const dd = U.dist(p, SW.last); if (dd < 0.8) return 0;
+    const v = dd / Math.max(1, p.t - SW.last.t);
+    SW.len += dd; SW.last = p; markTrace(p);
     return v;
   }
-  function swipeUp() { SW.last = null; if (SW.started && !SW.done) SW.auto = true; }
+  function swipeUp() {
+    SW.last = null;
+    if (!SW.started || SW.done || SW.auto) return;
+    if (SW.len < 30) { SW.started = false; SW.cov.fill(0); SW.devSum = SW.devN = 0; SW.prog = 0; toast('点線を一筆でなぞろう'); return; }
+    SW.auto = true;
+  }
   function swipeTick(dt) { if (SW.auto && !SW.done) SW.prog = Math.min(1, SW.prog + AUTO_RATE * dt / 1000); }
   function swipePanel(role, num, title, yomi, howto, desc = '') {
     panel.innerHTML = head(role, num, title, yomi) + `
       <p class="howto">${howto}</p>
-      <div class="meter"><div class="meter-fill" id="sw-fill"></div><span id="sw-txt">画面をひとなで！</span></div>
+      <div class="meter"><div class="meter-fill" id="sw-fill"></div><span id="sw-txt">赤い点線を一筆でなぞろう</span></div>
       ${desc ? `<p class="desc">${desc}</p>` : ''}`;
   }
   function swipeUI() {
     const f = $('#sw-fill'), t = $('#sw-txt');
     if (f) f.style.width = SW.prog * 100 + '%';
-    if (t && SW.started) t.textContent = SW.done ? '仕上がり！' : SW.auto ? 'そのまま仕上げ中…' : `${Math.round(SW.prog * 100)}%`;
+    if (t && SW.started) t.textContent = SW.done ? '仕上がり！' : SW.auto ? 'そのまま仕上げ中…' : `正確さ ${Math.round(swipeQ() * 100)}%`;
   }
-  /* なで方の見本（指のアイコンが左右に動く） */
-  function drawHint(g, t) {
-    if (SW.started) return;
-    const k = (Math.sin(t / 450) + 1) / 2, x = U.lerp(W * 0.2, W * 0.8, k), y = H * 0.55 + Math.sin(t / 300) * 6;
-    g.save();
-    g.strokeStyle = 'rgba(200,68,47,0.5)'; g.lineWidth = 6; g.lineCap = 'round'; g.setLineDash([2, 12]);
-    g.beginPath(); g.moveTo(W * 0.2, H * 0.55); g.lineTo(W * 0.8, H * 0.55); g.stroke(); g.setLineDash([]);
-    g.fillStyle = 'rgba(200,68,47,0.85)'; g.beginPath(); g.arc(x, y, 16, 0, 7); g.fill();
-    g.strokeStyle = '#fff'; g.lineWidth = 3; g.stroke();
-    g.fillStyle = 'rgba(36,32,29,0.82)'; g.fillRect(W / 2 - 92, H * 0.55 + 30, 184, 30);
-    g.fillStyle = '#fff'; g.font = `700 16px ${R.FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle';
-    g.fillText('ひとなでして始める', W / 2, H * 0.55 + 45);
+  /* お手本の線（赤い点線）・なぞった跡・始点の印 */
+  function drawGuide(g, t) {
+    const s = SW.guide; if (!s.length || SW.done) return;
+    g.save(); g.lineCap = g.lineJoin = 'round';
+    g.strokeStyle = 'rgba(255,255,255,0.75)'; g.lineWidth = 9;
+    g.beginPath(); s.forEach((q, j) => j ? g.lineTo(q.x, q.y) : g.moveTo(q.x, q.y)); g.stroke();
+    g.strokeStyle = 'rgba(200,68,47,0.9)'; g.lineWidth = 4; g.setLineDash([8, 7]); g.lineDashOffset = -t / 30;
+    g.stroke(); g.setLineDash([]);
+    g.strokeStyle = 'rgba(232,180,40,0.95)'; g.lineWidth = 6;           // なぞれた所は金色に
+    for (let j = 1; j < s.length; j++) if (SW.cov[j] && SW.cov[j - 1]) { g.beginPath(); g.moveTo(s[j - 1].x, s[j - 1].y); g.lineTo(s[j].x, s[j].y); g.stroke(); }
+    if (!SW.started) {
+      const a = s[0], b = s[Math.min(s.length - 1, 6)], ang = Math.atan2(b.y - a.y, b.x - a.x), pulse = 13 + Math.sin(t / 160) * 3;
+      g.fillStyle = 'rgba(200,68,47,0.9)'; g.beginPath(); g.arc(a.x, a.y, pulse, 0, 7); g.fill();
+      g.strokeStyle = '#fff'; g.lineWidth = 3; g.stroke();
+      g.translate(a.x, a.y); g.rotate(ang); g.fillStyle = '#fff';
+      g.beginPath(); g.moveTo(9, 0); g.lineTo(-4, -6); g.lineTo(-4, 6); g.closePath(); g.fill();
+    }
     g.restore();
+  }
+  /* 「ここから」の札（反転していない画面座標で描く） */
+  function drawHint(g, t, mirrored = false) {
+    if (SW.started || !SW.guide.length) return;
+    const a = SW.guide[0], x = mirrored ? W - a.x : a.x;
+    const tx = U.clamp(x, 70, W - 70), ty = a.y + (a.y > H - 60 ? -46 : 26);
+    g.save(); g.fillStyle = 'rgba(36,32,29,0.85)'; g.fillRect(tx - 64, ty, 128, 26);
+    g.fillStyle = '#fff'; g.font = `700 14px ${R.FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText('ここから一筆で', tx, ty + 13); g.restore();
   }
   /* 判定演出：正確なら PERFECT! で満点 */
   const FX = { t0: -1e9, text: '', sub: '', perfect: false };
   const PERFECT_Q = 0.85;
-  function grade(q, extraOk = true) {
-    const perfect = q >= PERFECT_Q && extraOk;
-    Object.assign(FX, { t0: performance.now(), perfect, text: perfect ? 'PERFECT!' : q >= 0.6 ? 'GREAT!' : 'GOOD', sub: perfect ? '見事！ 満点' : q >= 0.6 ? '上出来' : 'まずまず。丁寧になでると高得点' });
+  function grade(q, perfect) {
+    Object.assign(FX, { t0: performance.now(), perfect, text: perfect ? 'PERFECT!' : q >= 0.6 ? 'GREAT!' : 'GOOD', sub: perfect ? '見事！ 満点' : q >= 0.6 ? '上出来！ 点線にぴったり沿えば満点' : 'まずまず。点線にぴったり沿ってなぞろう' });
     Sfx.play(perfect ? 'fanfare' : 'done');
     return perfect ? 100 : qScore(q);
   }
@@ -191,10 +218,12 @@
     return s[k];
   };
 
+  const mainLine = () => G.design.lines.reduce((a, l) => l.samples.length > a.samples.length ? l : a, G.design.lines[0]);
+  const pathPts = d => U.samplePath(d, 3);
   /* ───────── 壱：版下絵（絵師） ───────── */
   const stages = {};
   stages.shitae = {
-    enter() { swipeReset(); this.wv = []; swipePanel('絵師', '壱', '版下絵', 'はんしたえ', '画面を<b>ひとなで</b>すると筆が輪郭を描きます。ゆっくり丁寧に。', '絵師が墨一色で描く版下絵は、そのまま版木に貼られて彫られます。'); },
+    enter() { swipeReset(mainLine().samples); this.wv = []; swipePanel('絵師', '壱', '版下絵', 'はんしたえ', '<b>赤い点線</b>（輪郭）を一筆でなぞろう。筆が絵全体を描き上げます。', '絵師が墨一色で描く版下絵は、そのまま版木に貼られて彫られます。'); },
     move(p, down) {
       const v = swipeMove(p, down);
       if (v) { this.wv.push(U.clamp(3.6 - v * 1.4, 1.6, 3.6)); Sfx.play('brush', 90); }
@@ -206,7 +235,7 @@
         const w = ws[Math.floor(j / l.samples.length * ws.length)] || 2.6, n = l.samples.length;
         return { x: q.x, y: q.y, w: w * Math.min(1, 0.45 + Math.min(j, n - 1 - j) * 0.18) };
       }) }));
-      G.st.scores.shitae = grade(swipeQ());
+      G.st.scores.shitae = grade(swipeQ(), tracePerfect());
       finishStage('irosashi', '版下絵が描き上がった！');
     },
     draw(g, t, dt) {
@@ -222,6 +251,7 @@
         const tip = partial(g, l.samples, SW.prog, '#1d1a17', 2.8);
         if (!SW.done) { g.fillStyle = 'rgba(29,26,23,0.8)'; g.beginPath(); g.arc(tip.x, tip.y, 3.5, 0, 7); g.fill(); }
       });
+      drawGuide(g, t);
       if (SW.prog >= 1 && !SW.done) this.finish();
       drawHint(g, t);
     },
@@ -229,7 +259,12 @@
 
   /* ───────── 弐：色さし（絵師） ───────── */
   stages.irosashi = {
-    enter() { swipeReset(); this.order = G.design.regions.slice().sort((a, b) => a.z - b.z); this.shown = 0; swipePanel('絵師', '弐', '色さし', 'いろさし', '画面を<b>ひとなで</b>して、版ごとの色を指定しよう。', '絵師の色指定をもとに、彫師は色の数だけ「色版」を彫ります。'); },
+    enter() {
+      const x0 = W * 0.12, x1 = W * 0.88, y = [0.25, 0.5, 0.75].map(k => H * k);
+      swipeReset(pathPts(`M${x0} ${y[0]} L${x1} ${y[0]} C${W * 0.98} ${y[0]} ${W * 0.98} ${y[1]} ${x1} ${y[1]} L${x0} ${y[1]} C${W * 0.02} ${y[1]} ${W * 0.02} ${y[2]} ${x0} ${y[2]} L${x1} ${y[2]}`));
+      this.order = G.design.regions.slice().sort((a, b) => a.z - b.z); this.shown = 0;
+      swipePanel('絵師', '弐', '色さし', 'いろさし', '刷毛で<b>赤い点線</b>を一筆でなぞって、色を指定しよう。', '絵師の色指定をもとに、彫師は色の数だけ「色版」を彫ります。');
+    },
     move(p, down) { if (swipeMove(p, down)) Sfx.play('brush', 120); },
     up() { swipeUp(); },
     draw(g, t, dt) {
@@ -242,7 +277,8 @@
         if (a > 0 && k >= this.shown) { this.shown = k + 1; Sfx.play('paint'); toast(`${r.name}`, ''); }
       });
       drawKeyArt(g, d.raster ? 0.9 : 1);
-      if (SW.prog >= 1 && !SW.done) { G.st.scores.iro = grade(swipeQ()); finishStage('hori', '色さし完了！ 色版を彫ろう'); }
+      drawGuide(g, t);
+      if (SW.prog >= 1 && !SW.done) { G.st.scores.iro = grade(swipeQ(), tracePerfect()); finishStage('hori', '色さし完了！ 色版を彫ろう'); }
       drawHint(g, t);
     },
   };
@@ -251,19 +287,19 @@
   const HR = { parts: [], lastChip: 0 };
   stages.hori = {
     enter() {
-      swipeReset(); HR.parts = [];
+      swipeReset(mainLine().samples); HR.parts = [];
       G.st.carve.forEach(c => { c.chips = []; c.q = 1; c.done = false; });
-      swipePanel('彫師', '参', '彫り', 'ほり', '画面を<b>ひとなで</b>して小刀で彫ろう。<b>速すぎると線が欠けます</b>。', '版下絵を裏返しに版木へ貼り、線の両側を彫って線を浮き上がらせます。');
+      swipePanel('彫師', '参', '彫り', 'ほり', '版木の<b>赤い点線</b>を一筆でなぞって彫ろう。<b>線から外れると欠けます</b>。', '版下絵を裏返しに版木へ貼り、線の両側を彫って線を浮き上がらせます。');
     },
     move(p, down) {
-      const v = swipeMove(p, down);
+      const v = swipeMove({ x: W - p.x, y: p.y, t: p.t }, down);
       if (!v) return;
       Sfx.play('carve', 50);
-      if (v > V_HI * 1.2 && p.t - HR.lastChip > 280) {
+      if (SW.curDev > 16 && p.t - HR.lastChip > 300) {
         HR.lastChip = p.t;
         const i = Math.random() * G.design.lines.length | 0, s = G.design.lines[i].samples;
         G.st.carve[i].chips.push({ ...s[Math.floor((s.length - 1) * SW.prog)] });
-        Sfx.play('chip'); toast('速すぎて線が欠けた！', 'bad');
+        Sfx.play('chip'); toast('線から外れて欠けた！', 'bad');
       }
     },
     up() { swipeUp(); },
@@ -285,15 +321,16 @@
       });
       HR.parts = HR.parts.filter(p => (p.life -= dt) > 0);
       HR.parts.forEach(p => { p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 0.0006 * dt; g.fillStyle = `rgba(225,190,140,${p.life / 500})`; g.fillRect(p.x, p.y, p.s, p.s * 0.6); });
+      drawGuide(g, t);
       g.restore();
       if (SW.prog >= 1 && !SW.done) {
         st.carve.forEach(c => { c.done = true; c.q = U.clamp(1 - 0.15 * c.chips.length, 0.3, 1); });
         const chips = st.carve.reduce((a, c) => a + c.chips.length, 0);
-        const sc = grade(Math.min(swipeQ(), 1 - chips * 0.1), chips === 0);
+        const sc = grade(Math.min(swipeQ(), 1 - chips * 0.1), tracePerfect() && chips === 0);
         st.scores.hori = sc === 100 ? 100 : Math.round(Math.min(sc, 100 * st.carve.reduce((a, c) => a + c.q, 0) / st.carve.length));
         finishStage('suri', '版木が彫り上がった！');
       }
-      drawHint(g, t);
+      drawHint(g, t, true);
     },
   };
 
@@ -303,10 +340,9 @@
   function blockScore(b) { return 0.3 * b.amount + 0.35 * b.kento + 0.35 * b.rub; }
   function printBlock(i) {
     const d = G.design, st = G.st;
-    const vs = S.vs.length ? S.vs : [1];
-    const good = vs.filter(v => v >= V_LO && v <= V_HI).length / vs.length;        // 丁寧さ
+    const good = SW.started ? U.clamp(1 - (meanDev() - 6) / 24, 0, 1) : 0.8;     // なぞりの正確さ
     const r = U.rng(i * 71 + st.blocks.length * 13 + (st.round || 0) * 997);
-    const pf = swipeQ() >= PERFECT_Q && good >= 0.8, err = pf ? 0 : (1 - good) * 6 * r(), ang = r() * Math.PI * 2;
+    const pf = SW.started && meanDev() <= 9, err = pf ? 0 : (1 - good) * 6 * r(), ang = r() * Math.PI * 2;
     const amount = pf ? 0.5 : 0.5 + (r() - 0.5) * 0.12 * (1 + (1 - good) * 2);
     const cov = new Float32Array(GW * GH);
     for (let k = 0; k < cov.length; k++) cov[k] = pf ? 1.2 : 0.75 + good * 0.4 + r() * 0.25;
@@ -319,9 +355,11 @@
   }
   stages.suri = {
     enter() {
-      swipeReset(); G.st.results = []; G.st.blockScores = []; G.st.round = (G.st.round || 0) + 1;
+      const cx = W / 2, cy = H / 2, rx = W * 0.36, ry = H * 0.34;
+      swipeReset(pathPts(`M${cx - rx} ${cy} A${rx} ${ry} 0 1 1 ${cx + rx} ${cy} A${rx} ${ry} 0 1 1 ${cx - rx + 4} ${cy + 8}`));
+      G.st.results = []; G.st.blockScores = []; G.st.round = (G.st.round || 0) + 1;
       S.printed = 0; S.print = null; S.vs = [];
-      swipePanel('摺師', '四', '摺り', 'すり', '画面を<b>ひとなで</b>して、ばれんで全ての版を摺り重ねよう。', '摺師は薄い色から濃い色へ、版木を替えて一色ずつ摺り重ねます。');
+      swipePanel('摺師', '四', '摺り', 'すり', 'ばれんで<b>赤い点線の円</b>を一筆でなぞって、全ての版を摺り重ねよう。', '摺師は薄い色から濃い色へ、版木を替えて一色ずつ摺り重ねます。');
     },
     move(p, down) { const v = swipeMove(p, down); if (v) { S.vs.push(v); Sfx.play('rub', 110); } },
     up() { swipeUp(); },
@@ -344,8 +382,9 @@
         gr.addColorStop(0, 'rgba(150,110,65,0.9)'); gr.addColorStop(1, 'rgba(70,45,25,0.9)');
         g.fillStyle = gr; g.beginPath(); g.arc(f.x, f.y, 30, 0, 7); g.fill();
       }
+      drawGuide(g, t);
       if (S.printed >= n && !SW.done) {
-        const sc = grade(swipeQ());
+        const sc = grade(swipeQ(), tracePerfect());
         st.scores.suri = sc === 100 ? 100 : Math.round(Math.min(sc, 100 * st.blockScores.reduce((a, x) => a + blockScore(x), 0) / n));
         finishStage('rakkan', '摺り上がり！ 紙をめくろう');
       }
@@ -370,8 +409,10 @@
   }
   stages.rakkan = {
     enter() {
-      swipeReset(); G.signed = false; G.sealT = 0; G.compare = false;
       const d = G.design;
+      const sp = d.raster ? { x: d.seal.x + 7, y: d.seal.y + 7 } : { x: d.sign.x, y: d.sign.y + 4 * 17 + 12 };
+      swipeReset(pathPts(`M${sp.x} ${Math.max(10, sp.y - 70)} L${sp.x} ${sp.y}`));
+      G.signed = false; G.sealT = 0; G.compare = false;
       if (d.original && !d._orig) { d._orig = new Image(); d._orig.src = d.original; }
       if (!G.st.name) G.st.name = NAMES[Math.random() * NAMES.length | 0];
       G.finalCv = R.render(d, G.st, { S: 2 });
@@ -381,7 +422,7 @@
       const st = G.st;
       if (!G.signed) {
         panel.innerHTML = head('絵師', '伍', '落款', 'らっかん') + `
-          <p class="howto">画面を<b>ひとなで</b>して印を押そう。</p>
+          <p class="howto"><b>赤い点線</b>をなぞって印を押そう。</p>
           <label class="field">号<input id="i-name" maxlength="4" value="${esc(st.name)}"></label>`;
         $('#i-name').oninput = e => { st.name = e.target.value.trim() || st.name; };
         return;
@@ -445,7 +486,7 @@
         g.fillText(cap, W - 6, H + 9);
       } else g.drawImage(G.finalCv, PAPER.x, PAPER.y, PAPER.w, PAPER.h);
       g.restore();
-      if (!G.signed) drawHint(g, t);
+      if (!G.signed) { drawGuide(g, t); drawHint(g, t); }
     },
   };
 
