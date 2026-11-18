@@ -27,11 +27,11 @@ const R = (() => {
       return c;
     });
   }
-  function paper(w, h) {
+  function paper(w, h, color = '#f1e6cf') {
     w = Math.round(w); h = Math.round(h);
-    return cached(`p${w}x${h}`, () => {
+    return cached(`p${w}x${h}${color}`, () => {
       const c = mk(w, h), g = c.getContext('2d');
-      g.fillStyle = '#f1e6cf'; g.fillRect(0, 0, w, h);
+      g.fillStyle = color; g.fillRect(0, 0, w, h);
       const gr = g.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.2, w / 2, h / 2, Math.max(w, h) * 0.75);
       gr.addColorStop(0, 'rgba(255,250,235,0.35)'); gr.addColorStop(1, 'rgba(160,125,80,0.16)');
       g.fillStyle = gr; g.fillRect(0, 0, w, h);
@@ -115,9 +115,55 @@ const R = (() => {
     } else g.fillStyle = hex;
     g.fill(region.path);
   }
+  /* ───── 原画の色分解（ラベル画像）から版を作る ───── */
+  const regionHex = r => r.hex || PIG[r.color].hex;
+  function loadRaster(d) {
+    if (!d.raster) return Promise.resolve();
+    if (d._rs) return d._rs;
+    const load = src => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error(src)); i.src = src; });
+    d._rs = Promise.all([load(d.raster.image), load(d.raster.labels)]).then(([img, lab]) => {
+      const w = lab.naturalWidth, h = lab.naturalHeight;
+      const ic = mk(w, h), ig = ic.getContext('2d'); ig.drawImage(img, 0, 0, w, h);
+      const lc = mk(w, h), lg = lc.getContext('2d'); lg.drawImage(lab, 0, 0);
+      const ld = lg.getImageData(0, 0, w, h).data, labels = new Uint8Array(w * h);
+      for (let i = 0; i < w * h; i++) labels[i] = Math.round(ld[i * 4] / 30);
+      d._ras = { w, h, labels, img: ig.getImageData(0, 0, w, h), canvas: ic, plates: {}, sil: {} };
+    });
+    return d._rs;
+  }
+  function plate(d, label) {
+    const r = d._ras;
+    if (!r.plates[label]) {
+      const c = mk(r.w, r.h), g = c.getContext('2d'), im = g.createImageData(r.w, r.h);
+      for (let i = 0; i < r.w * r.h; i++) if (r.labels[i] === label) {
+        im.data[i * 4] = r.img.data[i * 4]; im.data[i * 4 + 1] = r.img.data[i * 4 + 1]; im.data[i * 4 + 2] = r.img.data[i * 4 + 2]; im.data[i * 4 + 3] = 255;
+      }
+      g.putImageData(im, 0, 0); r.plates[label] = c;
+    }
+    return r.plates[label];
+  }
+  function silhouette(d, label, color) {
+    const r = d._ras, k = label + color;
+    if (!r.sil[k]) {
+      const c = mk(r.w / 2, r.h / 2), g = c.getContext('2d');
+      g.drawImage(plate(d, label), 0, 0, c.width, c.height);
+      g.globalCompositeOperation = 'source-in'; g.fillStyle = color; g.fillRect(0, 0, c.width, c.height);
+      r.sil[k] = c;
+    }
+    return r.sil[k];
+  }
+  const labelAt = (d, x, y) => { const r = d._ras; const ix = U.clamp(Math.floor(x * r.w / dims(d).W), 0, r.w - 1), iy = U.clamp(Math.floor(y * r.h / dims(d).H), 0, r.h - 1); return r.labels[iy * r.w + ix]; };
+  /* 版の形を設計座標 (0,0)-(W,H) に描く */
+  function drawRegion(g, d, region, alpha = 1) {
+    g.save(); g.globalAlpha *= alpha;
+    if (d.raster) { const { W, H } = dims(d); g.drawImage(plate(d, region.label), 0, 0, W, H); }
+    else fillRegion(g, region, regionHex(region));
+    g.restore();
+  }
   function colorLayer(d, region, hex, S) {
     const { W, H } = dims(d);
     const c = mk(W * S, H * S), g = c.getContext('2d');
+    if (d.raster) { g.drawImage(plate(d, region.label), 0, 0, c.width, c.height); return c; }
     g.setTransform(S, 0, 0, S, 0, 0);
     fillRegion(g, region, hex);
     return c;
@@ -146,6 +192,13 @@ const R = (() => {
   function keyLayer(d, st, S, opt = {}) {
     const { W, H } = dims(d), ink = PIG[d.keyColor || 'sumi'].hex;
     const c = mk(W * S, H * S), g = c.getContext('2d');
+    if (d.raster) {
+      g.drawImage(plate(d, d.raster.keyLabel), 0, 0, c.width, c.height);
+      g.setTransform(S, 0, 0, S, 0, 0); g.globalCompositeOperation = 'destination-out';
+      st.carve.forEach(cv => cv.chips.forEach(p => { g.beginPath(); g.arc(p.x, p.y, 4, 0, 7); g.fill(); }));
+      g.globalCompositeOperation = 'source-over';
+      return c;
+    }
     g.setTransform(S, 0, 0, S, 0, 0);
     g.strokeStyle = g.fillStyle = ink; g.lineCap = g.lineJoin = 'round';
     g.lineWidth = 2.4; g.strokeRect(1.5, 1.5, W - 3, H - 3);
@@ -209,31 +262,34 @@ const R = (() => {
   function render(d, st, opt) {
     const S = opt.S, { W: DW, H: DH } = dims(d), W = Math.round((DW + 2 * M) * S), H = Math.round((DH + 2 * M) * S);
     const out = mk(W, H), o = out.getContext('2d');
-    o.drawImage(paper(W, H), 0, 0);
+    o.drawImage(paper(W, H, d.paper), 0, 0);
     const upto = opt.upto ?? st.blocks.length - 1;
     let keyIdx = -1;
     st.blocks.forEach((b, i) => {
       const res = st.results[i];
       if (i > upto || !res || res.amount == null) return;
       if (b.kind === 'key') { keyIdx = i; return; }
-      const c = finish(colorLayer(d, b.region, PIG[st.colors[b.region.id]].hex, S), res, d);
+      const c = finish(colorLayer(d, b.region, regionHex(b.region), S), res, d);
       o.globalAlpha = strength(res);
       o.drawImage(c, (M + res.dx) * S, (M + res.dy) * S);
       o.globalAlpha = 1;
     });
     if (keyIdx >= 0) {
-      const res = st.results[keyIdx], bx = cartoucheBox(d);
-      o.save(); o.translate((M + res.dx) * S, (M + res.dy) * S); o.scale(S, S);
-      o.fillStyle = 'rgba(238,214,128,0.9)'; o.fillRect(bx.x, bx.y, bx.w, bx.h);
-      o.restore();
+      const res = st.results[keyIdx], bx = d.raster ? null : cartoucheBox(d);
+      if (!d.raster) {
+        o.save(); o.translate((M + res.dx) * S, (M + res.dy) * S); o.scale(S, S);
+        o.fillStyle = 'rgba(238,214,128,0.9)'; o.fillRect(bx.x, bx.y, bx.w, bx.h);
+        o.restore();
+      }
       const k = finish(keyLayer(d, st, S, { sign: opt.sign }), res, d);
-      o.globalCompositeOperation = 'multiply'; o.globalAlpha = strength(res) * 0.96;
+      o.globalCompositeOperation = d.raster ? 'source-over' : 'multiply'; o.globalAlpha = strength(res) * 0.96;
       o.drawImage(k, (M + res.dx) * S, (M + res.dy) * S);
       o.globalCompositeOperation = 'source-over'; o.globalAlpha = 1;
     }
     o.globalAlpha = 0.45; o.drawImage(fibers(W, H, 17, 0.6), 0, 0); o.globalAlpha = 1;
     if (opt.sign) {
       o.save(); o.translate(M * S, M * S); o.scale(S, S);
+      if (d.raster) { seal(o, d.seal.x, d.seal.y, 14, [...opt.sign][0] || '印'); o.restore(); return out; }
       const n = [...signText(d, opt.sign)].length;
       seal(o, d.sign.x - 8, d.sign.y + n * 17 + 4, 16, [...opt.sign][0] || '印');
       const bx = cartoucheBox(d);
@@ -249,7 +305,10 @@ const R = (() => {
     const c = mk(GW, GH), g = c.getContext('2d');
     g.scale(1 / CELL, 1 / CELL);
     g.fillStyle = g.strokeStyle = '#000';
-    if (block.kind === 'key') {
+    if (d.raster) {
+      g.setTransform(1, 0, 0, 1, 0, 0);
+      g.drawImage(plate(d, block.kind === 'key' ? d.raster.keyLabel : block.region.label), 0, 0, GW, GH);
+    } else if (block.kind === 'key') {
       g.lineWidth = 10; g.lineCap = 'round';
       st.strokes.forEach(s => { g.beginPath(); s.pts.forEach((p, i) => i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y)); g.stroke(); });
       d.autoPaths.forEach(p => g.stroke(p));
@@ -262,8 +321,8 @@ const R = (() => {
   }
   function blockContent(d, st, block, S) {
     if (block.kind === 'key') return keyLayer(d, st, S, { cartouche: true });
-    return colorLayer(d, block.region, PIG[st.colors[block.region.id]].hex, S);
+    return colorLayer(d, block.region, regionHex(block.region), S);
   }
 
-  return { M, CELL, dims, FONT, paper, wood, fibers, render, blockMask, blockContent, drawStroke, fillRegion };
+  return { M, CELL, dims, FONT, paper, wood, fibers, render, blockMask, blockContent, drawStroke, fillRegion, loadRaster, plate, silhouette, labelAt, drawRegion, regionHex, keyLayer };
 })();

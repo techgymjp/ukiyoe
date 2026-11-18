@@ -69,56 +69,144 @@ const U = (() => {
   return U;
 })();
 
-/* 効果音（WebAudioで合成） */
+/* 効果音とBGM（WebAudioで合成。音源ファイル不要） */
 const Sfx = {
-  on: true, ctx: null, noise: null, last: {},
+  on: true, bgmOn: true, ctx: null, noise: null, last: {}, master: null, sfxBus: null, bgmBus: null, koto: {},
   init() {
-    if (this.ctx) return;
+    if (this.ctx) { if (this.ctx.state === 'suspended') this.ctx.resume(); return; }
     try {
-      this.ctx = new (window.AudioContext || window.webkitAudioContext)();
-      const len = this.ctx.sampleRate * 0.6;
-      const b = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
-      const d = b.getChannelData(0);
+      const c = this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const len = c.sampleRate * 0.6, b = c.createBuffer(1, len, c.sampleRate), d = b.getChannelData(0);
       for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
       this.noise = b;
+      this.master = c.createGain(); this.master.connect(c.destination);
+      this.sfxBus = c.createGain(); this.sfxBus.connect(this.master);
+      this.bgmBus = c.createGain(); this.bgmBus.gain.value = 0;
+      // 簡易リバーブ（BGM用）
+      const rv = c.createConvolver(), il = c.sampleRate * 2.2, ib = c.createBuffer(2, il, c.sampleRate);
+      for (let ch = 0; ch < 2; ch++) { const x = ib.getChannelData(ch); for (let i = 0; i < il; i++) x[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / il, 3); }
+      rv.buffer = ib;
+      const wet = c.createGain(); wet.gain.value = 0.35;
+      this.bgmBus.connect(this.master); this.bgmBus.connect(rv); rv.connect(wet); wet.connect(this.master);
+      this.revIn = rv;
+      if (this.bgmOn) this.bgmStart();
     } catch (e) { this.ctx = null; }
+  },
+  /* 箏の音（Karplus-Strong 法で弦をはじく音を合成） */
+  kotoBuf(freq) {
+    const k = Math.round(freq);
+    if (this.koto[k]) return this.koto[k];
+    const c = this.ctx, sr = c.sampleRate, len = Math.floor(sr * 2.6), buf = c.createBuffer(1, len, sr), d = buf.getChannelData(0);
+    const N = Math.max(2, Math.round(sr / freq)), ring = new Float32Array(N);
+    for (let i = 0; i < N; i++) ring[i] = (Math.random() * 2 - 1) * (i < N / 3 ? 1 : 0.5);
+    let idx = 0;
+    for (let i = 0; i < len; i++) {
+      const nx = (idx + 1) % N, v = (ring[idx] + ring[nx]) * 0.4985;
+      d[i] = ring[idx]; ring[idx] = v; idx = nx;
+    }
+    for (let i = 0; i < 200; i++) d[i] *= i / 200;
+    return (this.koto[k] = buf);
+  },
+  pluck(freq, vol, when, bus) {
+    const c = this.ctx, src = c.createBufferSource(), g = c.createGain(), f = c.createBiquadFilter();
+    src.buffer = this.kotoBuf(freq); f.type = 'lowpass'; f.frequency.value = 3200;
+    g.gain.value = vol;
+    src.connect(f).connect(g).connect(bus || this.sfxBus); src.start(when);
+  },
+  bell(freq, vol, when, dur = 2.5, bus) {
+    const c = this.ctx;
+    [[1, 1], [2.76, 0.45], [5.4, 0.22], [8.9, 0.1]].forEach(([m, a]) => {
+      const o = c.createOscillator(), g = c.createGain();
+      o.frequency.value = freq * m;
+      g.gain.setValueAtTime(0.0001, when); g.gain.exponentialRampToValueAtTime(vol * a, when + 0.005);
+      g.gain.exponentialRampToValueAtTime(0.0001, when + dur / m ** 0.3);
+      o.connect(g).connect(bus || this.sfxBus); o.start(when); o.stop(when + dur + 0.1);
+    });
   },
   play(type, throttle = 0) {
     if (!this.on) return;
     this.init();
     const c = this.ctx; if (!c) return;
-    if (c.state === 'suspended') c.resume();
     const now = performance.now();
     if (throttle && this.last[type] && now - this.last[type] < throttle) return;
     this.last[type] = now;
-    const t = c.currentTime;
-    const noiseHit = (ftype, freq, vol, dur, q = 1) => {
+    const t = c.currentTime, bus = this.sfxBus;
+    const noiseHit = (ftype, freq, vol, dur, q = 1, attack = 0.002) => {
       const src = c.createBufferSource(); src.buffer = this.noise;
       const f = c.createBiquadFilter(); f.type = ftype; f.frequency.value = freq; f.Q.value = q;
       const g = c.createGain();
-      g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-      src.connect(f).connect(g).connect(c.destination);
-      src.start(t, Math.random() * 0.4, dur + 0.02);
+      g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + attack); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      src.connect(f).connect(g).connect(bus);
+      src.start(t, Math.random() * 0.4, dur + 0.05);
     };
-    const tone = (freq, vol, dur, type = 'sine', delay = 0) => {
-      const o = c.createOscillator(); o.type = type; o.frequency.value = freq;
+    const tone = (freq, vol, dur, type = 'sine', delay = 0, slide = 0) => {
+      const o = c.createOscillator(); o.type = type; o.frequency.setValueAtTime(freq, t + delay);
+      if (slide) o.frequency.exponentialRampToValueAtTime(freq * slide, t + delay + dur);
       const g = c.createGain();
-      g.gain.setValueAtTime(0.0001, t + delay);
-      g.gain.linearRampToValueAtTime(vol, t + delay + 0.01);
+      g.gain.setValueAtTime(0.0001, t + delay); g.gain.linearRampToValueAtTime(vol, t + delay + 0.005);
       g.gain.exponentialRampToValueAtTime(0.0001, t + delay + dur);
-      o.connect(g).connect(c.destination); o.start(t + delay); o.stop(t + delay + dur + 0.05);
+      o.connect(g).connect(bus); o.start(t + delay); o.stop(t + delay + dur + 0.05);
     };
+    const wood = (freq, vol, delay = 0) => { tone(freq, vol, 0.09, 'sine', delay, 0.7); };
+    const P = [293.7, 311.1, 392, 440, 466.2]; // 都節音階（レ ミ♭ ソ ラ シ♭）
     switch (type) {
-      case 'brush': noiseHit('bandpass', 1800, 0.10, 0.08, 0.7); break;
-      case 'carve': noiseHit('highpass', 3200, 0.10, 0.05); break;
-      case 'rub': noiseHit('lowpass', 650, 0.12, 0.10); break;
-      case 'chip': tone(180, 0.18, 0.12, 'square'); noiseHit('highpass', 2000, 0.2, 0.08); break;
-      case 'tap': tone(880, 0.10, 0.12, 'triangle'); break;
-      case 'paint': noiseHit('bandpass', 900, 0.25, 0.35, 0.5); break;
-      case 'paper': noiseHit('bandpass', 2400, 0.12, 0.25, 0.4); break;
-      case 'seal': tone(110, 0.35, 0.25); noiseHit('lowpass', 300, 0.3, 0.15); break;
-      case 'done': tone(587.3, 0.12, 0.5, 'triangle'); tone(880, 0.12, 0.7, 'triangle', 0.12); break;
-      case 'fanfare': [523.3, 587.3, 659.3, 784, 880].forEach((f, i) => tone(f, 0.1, 0.6, 'triangle', i * 0.11)); break;
+      case 'brush': noiseHit('bandpass', 2200, 0.07, 0.12, 0.6, 0.03); break;           // 筆のさらさら
+      case 'carve': noiseHit('highpass', 3800, 0.08, 0.04); tone(900 + Math.random() * 300, 0.02, 0.03, 'square'); break; // 小刀
+      case 'rub': noiseHit('lowpass', 520, 0.16, 0.14, 0.8, 0.04); break;              // ばれん
+      case 'chip': wood(380, 0.35); noiseHit('highpass', 2500, 0.18, 0.06); break;      // 欠け
+      case 'tap': wood(1250, 0.25); break;                                              // 拍子木風
+      case 'paint': noiseHit('bandpass', 700, 0.22, 0.4, 0.5, 0.05); noiseHit('bandpass', 1600, 0.08, 0.3, 0.8, 0.02); break; // 刷毛
+      case 'paper': noiseHit('bandpass', 3000, 0.1, 0.32, 0.3, 0.06); break;            // 紙
+      case 'seal': tone(95, 0.45, 0.22, 'sine', 0, 0.6); noiseHit('lowpass', 260, 0.35, 0.12); break; // 印
+      case 'good': this.pluck(P[2] * 2, 0.5, t); this.pluck(P[4] * 2, 0.4, t + 0.09); break;
+      case 'bad': this.pluck(P[1], 0.6, t); this.pluck(P[0] * 0.75, 0.5, t + 0.12); break;
+      case 'done': this.bell(880, 0.12, t, 2.2); break;                                 // りん
+      case 'fanfare': [0, 1, 2, 3, 4, 5, 6, 7].forEach((k, i) => this.pluck(P[k % 5] * (k >= 5 ? 2 : 1), 0.45, t + i * 0.07)); this.bell(587.3, 0.1, t + 0.6, 3); break; // 箏のグリッサンド
     }
-  }
+  },
+  /* ───── BGM：箏と尺八風の音による都節音階の即興 ───── */
+  bgmStart() {
+    if (!this.ctx || this.bgmTimer) return;
+    const c = this.ctx;
+    this.bgmBus.gain.cancelScheduledValues(c.currentTime);
+    this.bgmBus.gain.setTargetAtTime(0.55, c.currentTime, 1.2);
+    const scale = [146.8, 155.6, 196, 220, 233.1, 293.7, 311.1, 392, 440, 466.2, 587.3];
+    let step = 0, pos = 5, next = c.currentTime + 0.2;
+    const beat = 0.62;
+    const tick = () => {
+      while (next < c.currentTime + 1.2) {
+        const bar = Math.floor(step / 8), inBar = step % 8;
+        if (inBar === 0) this.pluck(scale[[0, 2, 3, 0][bar % 4]] / 2, 0.38, next, this.bgmBus);         // 低音
+        if (inBar === 4 && bar % 2) this.pluck(scale[[2, 3][bar % 2]] / 2 * 1.5, 0.22, next, this.bgmBus);
+        if (Math.random() < (inBar % 2 ? 0.35 : 0.7)) {                                                  // 旋律
+          pos = Math.max(3, Math.min(scale.length - 1, pos + [-2, -1, -1, 1, 1, 2, 0][Math.random() * 7 | 0]));
+          this.pluck(scale[pos] * (Math.random() < 0.15 ? 2 : 1), 0.28, next + (Math.random() < 0.2 ? beat / 2 : 0), this.bgmBus);
+          if (Math.random() < 0.15) this.pluck(scale[Math.min(scale.length - 1, pos + 2)], 0.18, next + 0.04, this.bgmBus);
+        }
+        if (inBar === 0 && bar % 4 === 2) this.shaku(scale[[7, 8, 9, 8][(bar / 4 | 0) % 4]], next, beat * 6); // 尺八風の長音
+        if (inBar === 0 && bar % 8 === 7) this.bell(1174.7, 0.025, next, 3, this.bgmBus);
+        next += beat; step++;
+      }
+    };
+    tick(); this.bgmTimer = setInterval(tick, 300);
+  },
+  shaku(freq, when, dur) {
+    const c = this.ctx, o = c.createOscillator(), g = c.createGain(), lfo = c.createOscillator(), lg = c.createGain(), f = c.createBiquadFilter();
+    o.type = 'triangle'; o.frequency.setValueAtTime(freq * 0.97, when); o.frequency.linearRampToValueAtTime(freq, when + 0.35);
+    lfo.frequency.value = 5; lg.gain.setValueAtTime(0, when); lg.gain.linearRampToValueAtTime(freq * 0.012, when + dur * 0.6);
+    lfo.connect(lg).connect(o.frequency);
+    f.type = 'lowpass'; f.frequency.value = 1500;
+    g.gain.setValueAtTime(0.0001, when); g.gain.linearRampToValueAtTime(0.07, when + 0.4); g.gain.setValueAtTime(0.07, when + dur - 0.8); g.gain.linearRampToValueAtTime(0.0001, when + dur);
+    o.connect(f).connect(g).connect(this.bgmBus);
+    const br = c.createBufferSource(), bf = c.createBiquadFilter(), bg = c.createGain();      // 息の音
+    br.buffer = this.noise; br.loop = true; bf.type = 'bandpass'; bf.frequency.value = freq * 2; bf.Q.value = 2;
+    bg.gain.setValueAtTime(0.0001, when); bg.gain.linearRampToValueAtTime(0.02, when + 0.2); bg.gain.linearRampToValueAtTime(0.004, when + dur);
+    br.connect(bf).connect(bg).connect(this.bgmBus);
+    [o, lfo, br].forEach(n => { n.start(when); n.stop(when + dur + 0.1); });
+  },
+  bgmStop() {
+    clearInterval(this.bgmTimer); this.bgmTimer = null;
+    if (this.ctx) this.bgmBus.gain.setTargetAtTime(0, this.ctx.currentTime, 0.4);
+  },
+  setBgm(on) { this.bgmOn = on; if (on) { this.init(); this.bgmStart(); } else this.bgmStop(); },
 };

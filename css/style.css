@@ -167,7 +167,7 @@ body[data-screen="screen-title"] .steps, body[data-screen="screen-gallery"] .ste
   .steps li span { font-size: 11px; }
   .steps li.active { font-size: 12px; gap: 4px; padding: 3px 8px; }
   #screen-work.active { grid-template-columns: 1fr; grid-template-rows: auto auto; height: auto; padding: 8px 10px 24px; gap: 10px; }
-  .stage-wrap { height: 64vh; height: min(64dvh, calc((100vw - 20px) / var(--ar, 0.7))); }
+  .stage-wrap { height: 56vh; height: min(56dvh, calc((100vw - 20px) / var(--ar, 0.7))); }
   .panel { overflow: visible; }
   .flow li { min-width: 0; flex: 1 1 40%; }
 }
@@ -183,3 +183,39 @@ body[data-screen="screen-title"] .steps, body[data-screen="screen-gallery"] .ste
 .note { font-size: 12px; color: var(--ink2); line-height: 1.6; }
 .btn.compare { background: var(--ai); border-color: var(--ai); color: #fff8ec; }
 .btn.compare:hover:not(:disabled) { background: #16294a; }
+
+/* 配色記憶ゲーム */
+.choices { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 12px 0; }
+.choice { aspect-ratio: 1; border-radius: 50%; border: 3px solid #fffaf0; box-shadow: 0 0 0 1.5px var(--ink), 0 3px 8px rgba(0,0,0,.25); cursor: pointer; }
+.choice:active { transform: scale(.94); }
+.score-line { font-size: 22px; text-align: center; margin: 10px 0; }
+.score-line b { font-size: 36px; color: var(--shu); }
+body.loading { cursor: progress; }
+body.loading #design-list-orig, body.loading #design-list { opacity: .5; pointer-events: none; }
+@media (max-width: 860px) {
+  .panel .desc, .panel .tip, .panel .role { display: none; }
+  .panel { padding: 10px 12px; font-size: 14px; line-height: 1.6; }
+  .panel h2 { margin: 0 0 6px; font-size: 20px; }
+  .panel .howto { margin-bottom: 6px; padding: 6px 8px; }
+  .controls { margin: 8px 0; }
+  .btn.big { padding: 10px 14px; font-size: 16px; }
+  .gauge { height: 36px; margin: 10px 0 18px; }
+  .lens { max-height: 110px; object-fit: contain; }
+  .score .rank b { font-size: 34px; }
+  .result li { padding: 4px; }
+  #screen-work.active { padding-bottom: 8px; }
+}
+.btn.primary.ready { animation: pulse 1s ease-in-out infinite; }
+@keyframes pulse { 50% { box-shadow: 0 0 0 6px rgba(200,68,47,.25); } }
+.btn.small[aria-pressed="false"] { opacity: .45; text-decoration: line-through; }
+
+@media (max-width: 560px) {
+  .hide-sm { display: none; }
+  .top-actions { gap: 4px; }
+  .topbar { gap: 6px; padding: 0 8px; }
+  .steps { gap: 2px; }
+  .steps li { padding: 3px 3px; }
+  .speed { font-size: 12px; }
+  .now { margin: 4px 0; font-size: 14px; }
+  .meter { margin: 6px 0; height: 24px; }
+}

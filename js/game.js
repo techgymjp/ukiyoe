@@ -56,8 +56,8 @@
   function prepDesign(d) {
     if (d._prep) return;
     d.lines.forEach(l => { l.path = new Path2D(l.d); l.samples = U.samplePath(l.d, 3); });
-    d.regions.forEach(r => r.path = new Path2D(r.d));
-    d.autoPaths = d.auto.map(a => new Path2D(a));
+    d.regions.forEach(r => { if (r.d) r.path = new Path2D(r.d); });
+    d.autoPaths = (d.auto || []).map(a => new Path2D(a));
     d.keyFillPaths = (d.keyFills || []).map(a => new Path2D(a));
     d._prep = true;
   }
@@ -69,7 +69,6 @@
     return {
       strokes: [], hist: [], devSum: 0, devN: 0,
       ink: d.lines.map(l => { const n = l.samples.length; return { cov: new Uint8Array(n), w: new Float32Array(n), ox: new Float32Array(n), oy: new Float32Array(n) }; }),
-      colors: Object.fromEntries(d.regions.map(r => [r.id, r.color])),
       carve: d.lines.map(() => ({ k: 0, pos: 0, done: false, chips: [], q: 1, knot: null })),
       blocks: buildBlocks(d), results: [], scores: {}, name: '', blockScores: [],
     };
@@ -147,16 +146,14 @@
     panel() {
       const d = G.design, n = d.lines.length, done = d.lines.filter((_, i) => lineDone(i)).length;
       panel.innerHTML = head('絵師', '壱', '版下絵', 'はんしたえ') + `
-        <p>浮世絵はまず<b>絵師</b>が墨一色で線画を描きます。この「版下絵」はそのまま版木に貼られて彫られるため、<b>絵師の筆跡がそのまま版画の線</b>になります。</p>
-        <p class="howto">青い点線の近くを指（マウス）でなぞるだけ。<b>筆が線に吸い付きます</b>。8割ほど描けば残りは自動で仕上がります。ゆっくり描くと太く、速く描くと細い線に。</p>
+        <p class="howto">青い点線の近くを<b>ざっくりなぞろう</b>。筆が線に吸い付きます。</p>
         <div class="meter"><div class="meter-fill" style="width:${done / n * 100}%"></div><span>線 ${done} / ${n}</span></div>
         <div class="controls">
           <button class="btn" id="b-undo" ${G.st.hist.length ? '' : 'disabled'}>一本戻す</button>
           <button class="btn" id="b-auto">お手本どおり描く</button>
           <button class="btn primary" id="b-next" ${done === n ? '' : 'disabled'}>色さしへ進む</button>
         </div>
-        ${d.artist ? `<p class="note">原画：${d.artist}『${d.series}』より。ゲーム用に線を簡略化しています。${d.note || ''}</p>` : ''}
-        <div class="tip"><b>豆知識</b>版下絵は彫る時に版木ごと削られて失われます。そのため、浮世絵の肉筆の下絵はほとんど現存していません。</div>`;
+        <p class="desc">絵師が墨一色で描く「版下絵」は、そのまま版木に貼られて彫られます。${d.raster ? 'なぞるのは大まかな輪郭です。' : ''}</p>`;
       $('#b-undo').onclick = () => { const i = G.st.hist.pop(); const k = inkOf(i); k.cov.fill(0); k.w.fill(0); this.panel(); };
       $('#b-auto').onclick = () => { G.design.lines.forEach((_, i) => { if (!lineDone(i)) { autoFill(i); G.st.hist.push(i); G.st.devSum += 12; G.st.devN++; } }); this.panel(); };
       $('#b-next').onclick = () => { buildStrokes(); G.st.scores.shitae = shitaeScore(); Sfx.play('done'); go('irosashi'); };
@@ -164,8 +161,9 @@
     draw(g) {
       const d = G.design;
       bgPaper(g);
-      g.save(); g.globalAlpha = 0.12;
-      d.regions.slice().sort((a, b) => a.z - b.z).forEach(r => R.fillRegion(g, r, PIG[r.color].hex));
+      g.save(); g.globalAlpha = d.raster ? 0.22 : 0.12;
+      if (d.raster) g.drawImage(d._ras.canvas, 0, 0, W, H);
+      else d.regions.slice().sort((a, b) => a.z - b.z).forEach(r => R.fillRegion(g, r, R.regionHex(r)));
       g.restore();
       g.strokeStyle = 'rgba(60,90,140,0.3)'; g.lineWidth = 1; g.strokeRect(1.5, 1.5, W - 3, H - 3);
       g.strokeStyle = 'rgba(60,90,140,0.22)'; d.autoPaths.forEach(p => g.stroke(p));
@@ -206,55 +204,96 @@
     },
   };
 
-  /* ───────── 弐：色さし（絵師） ───────── */
-  let selRegion = null;
+  /* ───────── 弐：色さし（絵師）＝配色記憶ゲーム ───────── */
+  const MEM = { phase: 'memo', t0: 0, order: [], i: 0, ok: 0, filled: new Set(), choices: [] };
+  const MEMO_SEC = 6;
+  const colorDist = (a, b) => { const p = h => [1, 3, 5].map(i => parseInt(h.substr(i, 2), 16)); const x = p(a), y = p(b); return Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]); };
+  function makeChoices(r) {
+    const right = R.regionHex(r), pool = [];
+    G.design.regions.forEach(o => { const h = R.regionHex(o); if (o !== r && pool.every(p => colorDist(p, h) > 28) && colorDist(h, right) > 28) pool.push(h); });
+    Object.values(PIG).forEach(p => { if (pool.length < 8 && pool.every(q => colorDist(q, p.hex) > 40) && colorDist(p.hex, right) > 60) pool.push(p.hex); });
+    const pick = pool.sort(() => Math.random() - 0.5).slice(0, 3);
+    return [right, ...pick].sort(() => Math.random() - 0.5);
+  }
+  function drawKeyArt(g, alpha = 1) {
+    const d = G.design;
+    g.save(); g.globalAlpha = alpha;
+    if (d.raster) g.drawImage(R.plate(d, d.raster.keyLabel), 0, 0, W, H);
+    else {
+      g.strokeStyle = PIG.sumi.hex; g.lineWidth = 2.2; g.strokeRect(1.5, 1.5, W - 3, H - 3);
+      G.st.strokes.forEach(s => drawStroke(g, s, PIG.sumi.hex, 0.9));
+      g.lineWidth = 1.2; d.autoPaths.forEach(p => g.stroke(p));
+    }
+    g.restore();
+  }
+  function highlight(g, r, t) {
+    const d = G.design, a = 0.45 + 0.3 * Math.sin(t / 180);
+    g.save(); g.globalAlpha = a;
+    if (d.raster) g.drawImage(R.silhouette(d, r.label, '#e0412a'), 0, 0, W, H);
+    else { g.fillStyle = '#e0412a'; g.fill(r.path); }
+    g.restore();
+    if (!d.raster) { g.save(); g.setLineDash([6, 5]); g.lineDashOffset = -t / 40; g.strokeStyle = '#c8442f'; g.lineWidth = 2; g.stroke(r.path); g.restore(); }
+  }
   stages.irosashi = {
-    enter() { selRegion = G.design.regions[0]; this.panel(); },
+    enter() {
+      Object.assign(MEM, { phase: 'memo', t0: performance.now(), i: 0, ok: 0, filled: new Set() });
+      MEM.order = G.design.regions.slice().sort((a, b) => a.z - b.z);
+      this.panel();
+    },
     panel() {
-      const d = G.design, st = G.st;
-      const rows = d.regions.map(r => `<button class="region-row ${r === selRegion ? 'sel' : ''}" data-r="${r.id}">
-        <i style="background:${PIG[st.colors[r.id]].hex}"></i>${r.name}${r.bokashi ? '<em>ぼかし</em>' : ''}<span>${PIG[st.colors[r.id]].name}</span></button>`).join('');
-      const sw = Object.entries(PIG).filter(([k]) => k !== 'sumi').map(([k, p]) => `<button class="swatch ${selRegion && st.colors[selRegion.id] === k ? 'sel' : ''}" data-p="${k}" title="${p.name}">
-        <i style="background:${p.hex}"></i>${p.name}</button>`).join('');
-      panel.innerHTML = head('絵師', '弐', '色さし', 'いろさし') + `
-        <p>彫師が墨線だけの版木（主版）を彫ると、それを摺った「校合摺り」が絵師に戻されます。絵師はそこに<b>朱で色を指定</b>し、彫師は色の数だけ「色版」を彫ります。</p>
-        <p class="howto">絵の部分をタップ（または下の一覧から選択）し、顔料を選びましょう。</p>
-        <div class="regions">${rows}</div>
-        <div class="palette">${sw}</div>
-        <div class="controls">
-          <button class="btn" id="b-reset">お手本の色に戻す</button>
-          <button class="btn primary" id="b-next">彫りへ進む</button>
-        </div>
-        <div class="tip"><b>豆知識</b>1829年頃から舶来の合成顔料「ベロ藍（プルシアンブルー）」が流行し、鮮やかな藍の風景画が次々と生まれました。</div>`;
-      panel.querySelectorAll('.region-row').forEach(b => b.onclick = () => { selRegion = d.regions.find(r => r.id === b.dataset.r); Sfx.play('tap'); this.panel(); });
-      panel.querySelectorAll('.swatch').forEach(b => b.onclick = () => { if (!selRegion) return; st.colors[selRegion.id] = b.dataset.p; Sfx.play('paint'); this.panel(); });
-      $('#b-reset').onclick = () => { d.regions.forEach(r => st.colors[r.id] = r.color); this.panel(); };
-      $('#b-next').onclick = () => { Sfx.play('done'); go('hori'); };
+      const n = MEM.order.length;
+      let body = '';
+      if (MEM.phase === 'memo') body = `
+        <p class="howto">完成の<b>配色を覚えよう！</b> <b id="memo-t">${MEMO_SEC}</b>秒で色が消えます。</p>
+        <div class="controls"><button class="btn primary big" id="b-ready">覚えた！</button></div>`;
+      else if (MEM.phase === 'quiz') {
+        const r = MEM.order[MEM.i];
+        body = `<p class="howto">光っている所は<b>何色</b>だった？</p>
+          <div class="now">${MEM.i + 1} / ${n}：<b>${r.name}</b></div>
+          <div class="choices">${MEM.choices.map(h => `<button class="choice" data-c="${h}" style="background:${h}" aria-label="色"></button>`).join('')}</div>`;
+      } else body = `
+        <div class="score-line">正解 <b>${MEM.ok}</b> / ${n}</div>
+        <div class="controls"><button class="btn primary big" id="b-next">彫りへ進む</button></div>`;
+      panel.innerHTML = head('絵師', '弐', '色さし', 'いろさし') + body + `
+        <p class="desc">絵師は墨摺りの下絵に<b>色を指定</b>し、彫師は色の数だけ「色版」を彫ります。</p>`;
+      const b = $('#b-ready'); if (b) b.onclick = () => this.startQuiz();
+      const nx = $('#b-next'); if (nx) nx.onclick = () => { G.st.scores.iro = Math.round(100 * MEM.ok / n); Sfx.play('done'); go('hori'); };
+      panel.querySelectorAll('.choice').forEach(c => c.onclick = () => this.answer(c.dataset.c));
+    },
+    startQuiz() {
+      if (MEM.phase !== 'memo') return;
+      MEM.phase = 'quiz'; MEM.choices = makeChoices(MEM.order[0]); Sfx.play('paper'); this.panel();
+    },
+    answer(h) {
+      if (MEM.phase !== 'quiz') return;
+      const r = MEM.order[MEM.i], right = R.regionHex(r) === h;
+      if (right) { MEM.ok++; Sfx.play('good'); toast('正解！', 'good'); }
+      else { Sfx.play('bad'); toast(`ちがう…「${r.name}」はこの色`, 'bad'); }
+      MEM.filled.add(r.id); MEM.i++;
+      if (MEM.i >= MEM.order.length) { MEM.phase = 'done'; Sfx.play('done'); }
+      else MEM.choices = makeChoices(MEM.order[MEM.i]);
+      this.panel();
     },
     draw(g, t) {
-      const d = G.design, st = G.st;
+      const d = G.design;
       bgPaper(g);
-      d.regions.slice().sort((a, b) => a.z - b.z).forEach(r => { g.globalAlpha = 0.92; R.fillRegion(g, r, PIG[st.colors[r.id]].hex); });
-      g.globalAlpha = 1;
-      g.strokeStyle = PIG.sumi.hex; g.lineWidth = 2.2; g.strokeRect(1.5, 1.5, W - 3, H - 3);
-      st.strokes.forEach(s => drawStroke(g, s, PIG.sumi.hex, 0.9));
-      g.lineWidth = 1.2; d.autoPaths.forEach(p => g.stroke(p));
-      if (selRegion) {
-        g.save(); g.setLineDash([6, 5]); g.lineDashOffset = -t / 40;
-        g.strokeStyle = '#fff'; g.lineWidth = 3.5; g.stroke(selRegion.path);
-        g.strokeStyle = '#c8442f'; g.lineWidth = 2; g.stroke(selRegion.path);
-        g.restore();
+      if (MEM.phase === 'memo') {
+        MEM.order.forEach(r => R.drawRegion(g, d, r));
+        drawKeyArt(g);
+        const left = MEMO_SEC - (performance.now() - MEM.t0) / 1000, e = $('#memo-t');
+        if (e) e.textContent = Math.max(0, Math.ceil(left));
+        if (left <= 0) this.startQuiz();
+        return;
       }
-    },
-    down(p) {
-      const hit = G.design.regions.slice().sort((a, b) => b.z - a.z).find(r => hitCtx.isPointInPath(r.path, p.x, p.y));
-      if (hit) { selRegion = hit; Sfx.play('tap'); this.panel(); }
+      MEM.order.forEach(r => { if (MEM.filled.has(r.id)) R.drawRegion(g, d, r); });
+      if (MEM.phase === 'quiz') highlight(g, MEM.order[MEM.i], t);
+      drawKeyArt(g, d.raster ? 0.9 : 1);
     },
   };
 
   /* ───────── 参：彫り（彫師） ─────────
      長押しで小刀が線に沿って進む。速すぎると線が欠ける。木の節では特に慎重に */
-  const VMAX = 90, SAFE = 48, SAFE_KNOT = 20;
+  const VMAX = 95, SAFE = 62, SAFE_KNOT = 34;
   const HR = { hold: false, v: 0, overT: 0, parts: [] };
   const curLine = () => G.st.carve.findIndex(c => !c.done);
   function setupKnots() {
@@ -262,7 +301,7 @@
     G.design.lines.forEach((l, i) => {
       const c = G.st.carve[i], n = l.samples.length;
       c.pos = c.pos || 0;
-      if (n >= 40 && !c.knot) { const len = Math.max(9, Math.round(n * 0.12)), a = Math.round(n * (0.3 + r() * 0.4)); c.knot = { a, b: Math.min(n - 2, a + len) }; }
+      if (n >= 80 && i % 2 === 0 && !c.knot) { const len = Math.max(8, Math.round(n * 0.08)), a = Math.round(n * (0.3 + r() * 0.4)); c.knot = { a, b: Math.min(n - 2, a + len) }; }
     });
   }
   const inKnot = c => c.knot && c.k >= c.knot.a - 2 && c.k <= c.knot.b;
@@ -273,13 +312,14 @@
       const chips = st.carve.reduce((a, c) => a + c.chips.length, 0);
       const li = curLine();
       panel.innerHTML = head('彫師', '参', '彫り', 'ほり') + `
-        <p><b>彫師</b>は版下絵を裏返しにして山桜の版木に貼り、小刀で線の両側を彫り込んで<b>線だけを浮き上がらせ</b>ます。だから版木の絵は左右反転しています。</p>
-        <p class="howto">画面（またはSpaceキー）を<b>押している間、小刀が線に沿って進みます</b>。押し続けると加速し、<b>速すぎると線が欠けます</b>。茶色い<b>木の節</b>では特にゆっくり。押す・離すで速さを調整しましょう。</p>
+        <p class="howto"><b>長押し</b>で小刀が進む。速すぎると線が欠けるので、ときどき離そう。</p>
         <div class="now">${li >= 0 ? `いま彫る線：<b>${d.lines[li].name}</b>` : '主版を彫り上げた！'}</div>
         <div class="speed"><span>刃の速さ</span><div class="speed-bar"><div class="speed-zone" id="speed-zone"></div><div class="speed-fill" id="speed-fill"></div></div></div>
         <div class="meter"><div class="meter-fill" style="width:${done / n * 100}%"></div><span>線 ${done} / ${n}　欠け ${chips}</span></div>
-        <div class="controls"><button class="btn primary" id="b-next" ${done === n ? '' : 'disabled'}>摺りへ進む</button></div>
-        <div class="tip"><b>豆知識</b>美人画の生え際を彫る「毛割（けわり）」では、1ミリに3本もの髪の毛を彫り分けました。頭彫りは熟練の親方の仕事です。</div>`;
+        <div class="controls">${done < n ? '<button class="btn ghost" id="b-deshi">残りを弟子に任せる</button>' : ''}<button class="btn primary" id="b-next" ${done === n ? '' : 'disabled'}>摺りへ進む</button></div>
+        <p class="desc">彫師は版下絵を裏返しに版木へ貼り、線の両側を彫って線を浮き上がらせます。だから絵は左右反転。</p>`;
+      const dz = $('#b-deshi');
+      if (dz) dz.onclick = () => { G.st.carve.forEach((c, i) => { if (!c.done) { c.done = true; c.k = d.lines[i].samples.length - 1; c.q = 0.8; } }); HR.hold = false; HR.v = 0; Sfx.play('done'); this.panel(); };
       $('#b-next').onclick = () => {
         const st = G.st; st.scores.hori = Math.round(100 * st.carve.reduce((a, c) => a + c.q, 0) / st.carve.length);
         Sfx.play('done'); go('suri');
@@ -317,7 +357,8 @@
       bgWood(g);
       g.save(); mirror(g);
       g.fillStyle = 'rgba(245,236,215,0.3)'; g.fillRect(0, 0, W, H);
-      st.strokes.forEach(s => drawStroke(g, s, 'rgba(40,28,20,0.5)'));
+      if (d.raster) { g.globalAlpha = 0.55; g.drawImage(R.silhouette(d, d.raster.keyLabel, '#2b1d14'), 0, 0, W, H); g.globalAlpha = 1; }
+      else st.strokes.forEach(s => drawStroke(g, s, 'rgba(40,28,20,0.5)'));
       g.lineCap = g.lineJoin = 'round';
       const carved = (path) => {
         g.strokeStyle = 'rgba(110,70,40,0.75)'; g.lineWidth = 8; g.stroke(path);
@@ -385,7 +426,7 @@
   function kentoScore(e) { return U.clamp(1 - (e - 0.7) / 7, 0, 1); }
   function rubMean() {
     const res = resNow(), m = S.mask; let s = 0;
-    for (let i = 0; i < m.mask.length; i++) if (m.mask[i]) s += Math.min(1, res.cov[i]);
+    for (let i = 0; i < m.mask.length; i++) if (m.mask[i]) s += Math.min(1, res.cov[i] / 0.8);
     return m.n ? s / m.n : 1;
   }
   const rubScore = mean => U.clamp((mean - 0.4) / 0.55, 0, 1);
@@ -401,7 +442,12 @@
     bgWood(g);
     g.save(); mirror(g);
     g.fillStyle = 'rgba(80,48,25,0.3)'; g.fillRect(0, 0, W, H);
-    if (b.kind === 'key') {
+    if (d.raster) {
+      const label = b.kind === 'key' ? d.raster.keyLabel : b.region.label;
+      g.drawImage(R.silhouette(d, label, '#5a381f'), 1.4, 1.6, W, H);
+      g.drawImage(R.silhouette(d, label, '#e3c49a'), 0, 0, W, H);
+      if (ink > 0) { g.globalAlpha = ink; g.drawImage(R.plate(d, label), 0, 0, W, H); g.globalAlpha = 1; }
+    } else if (b.kind === 'key') {
       const raised = (color, dx) => {
         g.save(); g.translate(dx, dx);
         st.strokes.forEach(s => drawStroke(g, s, color, 1.1));
@@ -415,7 +461,7 @@
       const r = b.region;
       g.save(); g.translate(1.4, 1.6); g.fillStyle = '#5a381f'; g.fill(r.path); g.restore();
       g.fillStyle = '#dcb88c'; g.fill(r.path);
-      if (ink > 0) { g.globalAlpha = ink * 0.9; R.fillRegion(g, r, PIG[st.colors[r.id]].hex); g.globalAlpha = 1; }
+      if (ink > 0) { g.globalAlpha = ink * 0.9; R.fillRegion(g, r, R.regionHex(r)); g.globalAlpha = 1; }
     }
     g.restore();
     drawKento(g);
@@ -473,22 +519,22 @@
     panel() {
       const st = G.st, b = blk(), n = st.blocks.length;
       const isBokashi = b.kind === 'color' && b.region.bokashi;
-      const pig = b.kind === 'key' ? PIG.sumi : PIG[st.colors[b.region.id]];
+      const pig = b.kind === 'key' ? { hex: G.design.raster ? '#36404a' : PIG.sumi.hex, name: '墨' } : { hex: R.regionHex(b.region), name: b.region.color ? PIG[b.region.color].name : '' };
       const chips = ['絵の具', '見当', 'ばれん', 'めくる'].map((s, k) => `<li class="${['paint', 'kento', 'baren', 'reveal'].indexOf(S.phase) === k ? 'on' : ''}">${s}</li>`).join('');
       let body = '';
       if (S.phase === 'paint') body = `
-        <p class="howto">${isBokashi ? '<b>ぼかし摺り</b>：湿らせた版木に刷毛で絵の具を拭き込み、濃淡をつけます。' : '版木に刷毛で絵の具と糊を置きます。'}針が<b>朱の枠</b>に入った瞬間に「刷毛を置く」！</p>
+        <p class="howto">針が<b>朱の枠</b>に入った瞬間に「刷毛を置く」！</p>
         <div class="gauge"><div class="gauge-zone"></div><div class="gauge-needle" id="needle"></div><span class="gl">薄い</span><span class="gr">濃い</span></div>
         <div class="controls"><button class="btn primary big" id="b-brush">刷毛を置く（Space）</button></div>
         ${S.i >= 1 ? '<div class="controls"><button class="btn ghost" id="b-deshi">残りの版を弟子に任せる</button></div>' : ''}`;
       if (S.phase === 'kento') body = `
-        <p class="howto">紙をドラッグして、右下の角を<b>「鉤（かぎ）」</b>に、下の辺を<b>「引付（ひきつけ）」</b>に合わせます。近づけると<b>ぴたりと吸い付きます</b>。</p>
+        <p class="howto">紙をドラッグして右下の角を<b>鉤（かぎ）</b>に合わせよう。近づくと吸い付きます。</p>
         <canvas id="lens" class="lens" width="320" height="200"></canvas>
         <div class="controls"><button class="btn primary big" id="b-place">紙を置く</button></div>`;
       if (S.phase === 'baren') body = `
-        <p class="howto">ばれんで紙の背をこすって色を移します。円を描くように、版の形が透けて見えるまでまんべんなく。</p>
+        <p class="howto">ばれんで紙を<b>まんべんなくこすろう</b>。</p>
         <div class="meter"><div class="meter-fill" id="rub-fill"></div><span id="rub-txt">0%</span></div>
-        <div class="controls"><button class="btn primary big" id="b-peel" disabled>紙をめくる</button></div>`;
+        <div class="controls"><button class="btn primary big" id="b-peel">紙をめくる</button></div>`;
       if (S.phase === 'reveal') {
         const bs = st.blockScores[S.i];
         const word = (v, a, b, c) => v > 0.85 ? a : v > 0.55 ? b : c;
@@ -501,7 +547,7 @@
       panel.innerHTML = head('摺師', '四', '摺り', 'すり') + `
         <div class="blockinfo">第${S.i + 1}版 / 全${n}版　<b>${b.name}</b><span class="pig"><i style="background:${pig.hex}"></i>${pig.name}${isBokashi ? '・ぼかし' : ''}</span></div>
         <ol class="phase">${chips}</ol>${body}
-        <div class="tip"><b>豆知識</b>${['摺師は薄い色から濃い色へ、一色ごとに版木を替えて摺り重ねます。一枚の錦絵に十数版を使うことも。',
+        <div class="tip desc"><b>豆知識</b>${['摺師は薄い色から濃い色へ、一色ごとに版木を替えて摺り重ねます。一枚の錦絵に十数版を使うことも。',
           '「見当」は版木に彫られた目印。色版がずれる「見当違い」という言葉はここから生まれました。',
           'ばれんは竹の皮で包んだ摺り道具。芯の「当て皮」の縄目が力を均一に伝えます。',
           '初版は200枚ほど。売れれば版木を使って「増し摺り」が重ねられました。'][S.i % 4]}</div>`;
@@ -576,7 +622,7 @@
         }
         const mean = rubMean(); S.prog = mean;
         const f = $('#rub-fill'), tx = $('#rub-txt'), b = $('#b-peel');
-        if (f) { f.style.width = Math.min(100, mean * 100) + '%'; tx.textContent = `摺れ具合 ${Math.round(mean * 100)}%`; b.disabled = mean < 0.7; }
+        if (f) { f.style.width = Math.min(100, mean * 100) + '%'; tx.textContent = `摺れ具合 ${Math.round(mean * 100)}%`; b.classList.toggle('ready', mean >= 0.9); }
       } else if (S.phase === 'reveal') {
         drawBlock(g, 0.6);
         const p = U.clamp((performance.now() - S.t0) / 900, 0, 1), e = 1 - Math.pow(1 - p, 3);
@@ -637,7 +683,7 @@
     const st = G.st;
     const suri = Math.round(100 * st.blockScores.reduce((a, b) => a + blockScore(b), 0) / st.blockScores.length);
     st.scores.suri = suri;
-    const total = Math.round(0.3 * (st.scores.shitae ?? 0) + 0.3 * (st.scores.hori ?? 0) + 0.4 * suri);
+    const total = Math.round(0.15 * (st.scores.shitae ?? 0) + 0.15 * (st.scores.iro ?? 0) + 0.25 * (st.scores.hori ?? 0) + 0.45 * suri);
     const rank = RANKS.find(r => total >= r[0]);
     return { total, rank, price: Math.round(12 + total * 0.12) };
   }
@@ -653,10 +699,10 @@
       const st = G.st;
       if (!G.signed) {
         panel.innerHTML = head('絵師', '伍', '落款', 'らっかん') + `
-          <p>全ての版を摺り終えました。${G.design.artistSign ? `北斎の署名「${G.design.artistSign}」は主版に彫られています。最後に<b>あなたの号</b>で摺師の印を押して仕上げます。` : '最後に絵師の<b>雅号（ペンネーム）</b>を入れ、印を押して仕上げます。'}</p>
+          <p class="howto">${G.design.raster ? `${G.design.artist}の署名は主版に彫られています。<b>あなたの号</b>で摺師の印を押そう。` : '<b>雅号</b>を入れて印を押そう。'}</p>
           <label class="field">雅号<input id="i-name" maxlength="4" value="${esc(st.name || NAMES[Math.random() * NAMES.length | 0])}"></label>
           <div class="controls"><button class="btn" id="b-rand">別の号</button><button class="btn primary big" id="b-sign">落款を押す</button></div>
-          <div class="tip"><b>豆知識</b>題名の入った枠を「題箋（だいせん）」、丸い「極（きわめ）」の印は幕府の検閲を通った証の改印です。</div>`;
+          <div class="tip desc"><b>豆知識</b>題名の枠は「題箋」、丸い「極」印は幕府の検閲を通った証です。</div>`;
         $('#b-rand').onclick = () => { $('#i-name').value = NAMES[Math.random() * NAMES.length | 0]; };
         $('#b-sign').onclick = () => this.sign();
         return;
@@ -667,6 +713,7 @@
           <div class="rank"><span>${rank[1]}</span><b>${total}</b>点</div>
           <ul class="result">
             <li><span>版下絵（絵師）</span>${st.scores.shitae}点</li>
+            <li><span>色さし（絵師）</span>${st.scores.iro ?? 0}点</li>
             <li><span>彫り（彫師）</span>${st.scores.hori}点</li>
             <li><span>摺り（摺師）</span>${st.scores.suri}点</li>
           </ul>
@@ -677,7 +724,7 @@
           <button class="btn" id="b-gal">画廊に飾る</button>
         </div>
         ${G.design.original ? `<div class="controls"><button class="btn compare" id="b-cmp">${G.compare ? '自分の作品に戻す' : `${G.design.artist}の原画と比べる`}</button></div>
-        <p class="note">${G.design.credit}</p>` : ''}
+        <p class="note desc">${G.design.credit}</p>` : ''}
         <div class="controls">
           <button class="btn" id="b-again">増し摺り（同じ版木でもう一枚）</button>
           <button class="btn" id="b-home">別の画題を選ぶ</button>
@@ -762,7 +809,7 @@
     const card = (d, i) => `<article class="card ${d.w > (d.h || 600) ? 'wide' : ''}">
       <div class="thumb"><img alt="${d.title}の完成見本" data-i="${i}"></div>
       <div class="card-body">${d.artist ? `<div class="badge">${d.artist}『${d.series}』</div>` : ''}<h3>${d.title}<small>${d.yomi}</small></h3><p>${d.desc}</p>
-      <div class="lv">難しさ ${'★'.repeat(d.level)}${'☆'.repeat(3 - d.level)}　${d.lines.length}本の線・${d.regions.length + 1}版${d.w > (d.h || 600) ? '・横大判' : ''}</div>
+      <div class="lv">難しさ ${'★'.repeat(d.level)}${'☆'.repeat(3 - d.level)}　${d.regions.length + 1}版${d.raster ? '・原画を色分解' : ''}</div>
       <button class="btn primary" data-start="${i}">この画題で始める</button></div></article>`;
     const box = $('#design-list'), box2 = $('#design-list-orig');
     box2.innerHTML = DESIGNS.map((d, i) => d.artist ? card(d, i) : '').join('');
@@ -771,15 +818,27 @@
     DESIGNS.forEach((d, i) => {
       setTimeout(() => {
         prepDesign(d);
-        const c = R.render(d, idealState(d), { S: 0.7 });
-        document.querySelector(`img[data-i="${i}"]`).src = c.toDataURL('image/jpeg', 0.85);
+        const img = document.querySelector(`img[data-i="${i}"]`);
+        if (d.raster) { img.src = d.original; return; }
+        img.src = R.render(d, idealState(d), { S: 0.7 }).toDataURL('image/jpeg', 0.85);
       }, 30 + i * 60);
     });
   }
-  function start(i) {
+  async function start(i) {
     Sfx.init();
-    G.design = DESIGNS[i]; prepDesign(G.design); setDims(G.design);
-    G.st = newState(G.design);
+    const d = DESIGNS[i];
+    prepDesign(d);
+    if (d.raster && !d._ras) {
+      document.body.classList.add('loading');
+      try { await R.loadRaster(d); }
+      catch (e) {
+        d._rs = null;
+        alert('版木の読み込みに失敗しました。GitHub Pages などのWebサーバー経由で開いてください（ファイルを直接開くと画像を解析できません）。');
+        return;
+      } finally { document.body.classList.remove('loading'); }
+    }
+    G.design = d; setDims(d);
+    G.st = newState(d);
     go('shitae');
   }
 
@@ -820,7 +879,15 @@
   $('#btn-home').onclick = toTitle;
   $('#btn-gallery').onclick = () => { if (G.stage && G.stageName !== 'rakkan' && !confirm('作業中の錦絵は失われます。画廊へ移動しますか？')) return; showGallery(); };
   $('#btn-gallery-back').onclick = () => { show('screen-title'); };
-  $('#btn-sound').onclick = (e) => { Sfx.on = !Sfx.on; e.currentTarget.setAttribute('aria-pressed', Sfx.on); e.currentTarget.textContent = Sfx.on ? '音 有' : '音 無'; };
+  const pref = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) { return null; } };
+  Sfx.on = pref('ukiyoe-sfx') !== '0'; Sfx.bgmOn = pref('ukiyoe-bgm') !== '0';
+  const syncAudioBtns = () => { $('#btn-sound').setAttribute('aria-pressed', Sfx.on); $('#btn-bgm').setAttribute('aria-pressed', Sfx.bgmOn); };
+  syncAudioBtns();
+  $('#btn-sound').onclick = () => { Sfx.on = !Sfx.on; pref('ukiyoe-sfx', Sfx.on ? '1' : '0'); syncAudioBtns(); Sfx.play('tap'); };
+  $('#btn-bgm').onclick = () => { Sfx.setBgm(!Sfx.bgmOn); pref('ukiyoe-bgm', Sfx.bgmOn ? '1' : '0'); syncAudioBtns(); };
+  // ブラウザの自動再生制限のため、最初の操作で音を開始
+  document.addEventListener('pointerdown', () => Sfx.init(), { once: true });
+  document.addEventListener('keydown', () => Sfx.init(), { once: true });
 
   texPaper = R.paper(920, 1320);
   texWood = R.wood(920, 1320);
