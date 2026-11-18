@@ -58,6 +58,7 @@ python3 -m http.server 8000
 
 ```
 index.html          画面構成
+asobikata.html      遊び方のページ
 css/style.css       スタイル
 js/util.js          汎用関数・効果音とBGM（WebAudio）
 js/designs.js       顔料の色

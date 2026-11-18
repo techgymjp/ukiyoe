@@ -259,3 +259,19 @@ body.loading #design-list-orig, body.loading #design-list { opacity: .5; pointer
   .cand-card img { max-height: 26vh; max-height: 26dvh; }
   body.picking .stage-wrap { height: 40vh; height: min(40dvh, calc((100vw - 20px) / var(--ar, 0.7))); }
 }
+
+/* 遊び方ページ */
+a.brand { text-decoration: none; }
+.howto-link { text-align: center; margin: 0 0 10px; }
+.howto-link .btn, .howto-back .btn { display: inline-block; text-decoration: none; }
+.howto-main { max-width: 720px; margin: 0 auto; padding: 24px 16px 48px; line-height: 1.9; }
+.howto-main h1 { font-size: 30px; letter-spacing: .2em; margin: 6px 0 8px; }
+.howto-main h2 { font-size: 20px; margin: 28px 0 8px; display: flex; align-items: center; gap: 10px; }
+.howto-main h2::before { content: ""; width: 5px; height: 20px; background: var(--shu); }
+.howto-main .lead { text-align: left; margin: 0 0 16px; }
+.howto-steps { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.howto-steps li { display: flex; gap: 12px; align-items: flex-start; background: rgba(255,252,244,.6); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
+.howto-steps li > span { flex: none; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--shu); color: #fff8ec; font-weight: 800; }
+.howto-steps strong { display: block; font-size: 17px; }
+.howto-tips { padding-left: 1.2em; margin: 0; }
+.howto-back { text-align: center; margin-top: 30px; }

@@ -13,7 +13,6 @@
   const G = { idx: 0, design: null, st: null, total: 0, playing: false };
   window.UKIYOE = G;
   const STAGES = MEISAKU;
-  const KANA = 'いろはにほへとちりぬるを';
 
   /* ───────── 共通 ───────── */
   function setDims(d) {
@@ -161,7 +160,7 @@
     panel.innerHTML = `<p class="howto">第<b>${P.picked.length + 1}</b>版 / 全${n}版：<b>次に摺る版</b>はどれ？<br><small>主版（墨の線）が最初。色は薄い色→濃い色の順。</small></p>
       <div class="cand">
         <button class="cand-nav" id="b-prev" aria-label="前の版" ${cs.length < 2 ? 'disabled' : ''}>◀</button>
-        <div class="cand-card" id="cand"><img src="${th[k]}" alt="版木"><span>${KANA[P.order.indexOf(k)]}の版　${P.view + 1} / ${cs.length}</span></div>
+        <div class="cand-card" id="cand"><img src="${th[k]}" alt="版木"><span>${P.view + 1} / ${cs.length}</span></div>
         <button class="cand-nav" id="b-next2" aria-label="次の版" ${cs.length < 2 ? 'disabled' : ''}>▶</button>
       </div>
       <div class="cand-dots">${cs.map((_, i) => `<i class="${i === P.view ? 'on' : ''}"></i>`).join('')}</div>
@@ -185,7 +184,7 @@
     P.tmp = U.canvas(P.full.width, P.full.height); P.covCv = U.canvas(GW, GH);
     P.phase = 'rub';
     panel.innerHTML = `<div class="role"><span class="role-seal">摺</span>${G.design.title}</div>
-      <p class="howto"><b>${KANA[P.order.indexOf(k)]}の版</b>を摺ろう。ばれんで紙を<b>まんべんなくこすろう</b>。</p>
+      <p class="howto">ばれんで紙を<b>まんべんなくこすって</b>摺ろう。</p>
       <div class="meter"><div class="meter-fill" id="sr-fill"></div><span id="sr-txt"></span></div>
       <div class="controls"><button class="btn ghost" id="b-fin">摺り上げる</button></div>`;
     $('#b-fin').onclick = finishRub;
