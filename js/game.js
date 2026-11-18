@@ -116,13 +116,14 @@
     st.results = saved;
     return c;
   }
-  /* 摺る順番の決まり：下の層から摺る。その版の下に敷かれる版（after）を摺り終えていれば摺れる。
-     主版（墨線）は一番上の層なので、線の下に敷かれる色版（keyAfter）を摺り終えてから
-     （下の版を後から摺ると、上の版が隠れてしまう。tools/layers.py で作品ごとに求めて検証済み） */
+  /* 摺る順番の判定：版を摺ると、前に摺った色を上書きする。すべての順番を実際に摺ってみて
+     完成図と見た目が変わらない順番（orders。tools/layers.py で求めたもの）だけが正解。
+     いま選んだ版で、まだ正解の順番のどれかに進めるなら摺れる */
+  const labelOf = k => (k === 0 ? 1 : G.st.blocks[k].region.label);
   function canPrint(k, picked = P.picked) {
     if (picked.includes(k)) return false;
-    const under = k === 0 ? (G.design.keyAfter || []) : (G.st.blocks[k].region.after || []);
-    return under.every(lab => picked.includes(G.st.blocks.findIndex(b => b.region && b.region.label === lab)));
+    const seq = picked.concat(k).map(labelOf);
+    return (G.design.orders || []).some(o => seq.every((l, n) => o[n] === l));
   }
   const nextValid = () => G.st.blocks.findIndex((_, k) => canPrint(k));
   /* 版木カード：彫り下げた所は暗く、浮き出た版の形は明るい木の縁と影で立体的に */
@@ -189,7 +190,7 @@
     const k = cs[P.view];
     if (P.pickFor !== P.picked.length) { P.pickFor = P.picked.length; P.pickT0 = performance.now(); }
     P.preview = k;
-    panel.innerHTML = `<p class="howto">第<b>${P.picked.length + 1}</b>版 / 全${n}版：<b>次に摺る版</b>はどれ？<br><small>めくると、摺った時の色が紙にうっすら映ります。下に敷かれる版から先に。墨の線は一番上。</small></p>
+    panel.innerHTML = `<p class="howto">第<b>${P.picked.length + 1}</b>版 / 全${n}版：<b>次に摺る版</b>はどれ？<br><small>めくると、摺った時の色が紙にうっすら映ります。版を摺ると前の色を上書きします。完成図になる順番は？</small></p>
       <div class="ptime"><div id="pk-time"></div><span id="pk-bonus"></span></div>
       <div class="cand">
         <button class="cand-nav" id="b-prev" aria-label="前の版" ${cs.length < 2 ? 'disabled' : ''}>◀</button>
@@ -284,8 +285,8 @@
     Sfx.play('bad');
     const th = thumbs(G.design, G.st);
     panel.innerHTML = `<div class="role"><span class="role-seal">終</span>${G.design.title}</div>
-      <p class="howto">下に敷く版より先に、上の版を摺ってしまいました。正しい順番の例：</p>
-      <div class="blocks answer">${G.st.blocks.map((_, k) => k).slice(1).concat(0).map((k, n) => `<div class="blockcard"><img src="${th[k]}" alt=""><span>${n + 1}番目</span></div>`).join('')}</div>
+      <p class="howto">この順番では、あとから摺った版が先の色を上書きして、完成図と違ってしまいます。正しい順番の例：</p>
+      <div class="blocks answer">${G.design.orders[0].map(l => (l === 1 ? 0 : G.st.blocks.findIndex(b => b.region && b.region.label === l))).map((k, n) => `<div class="blockcard"><img src="${th[k]}" alt=""><span>${n + 1}番目</span></div>`).join('')}</div>
       <div class="controls"><button class="btn primary big" id="b-retry">この図からやり直す</button></div>
       <div class="controls"><button class="btn" id="b-share">シェア</button><button class="btn" id="b-title">タイトルへ</button></div>`;
     $('#b-retry').onclick = withAd(() => startStage(G.idx));
