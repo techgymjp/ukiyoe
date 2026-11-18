@@ -53,6 +53,7 @@ python3 -m http.server 8000
 - 東洲斎写楽「市川鰕蔵の竹村定之進」 Harris Brisbane Dick Fund and Rogers Fund, 1949（JP3114）
 
 版は `tools/separate.py` で原画を主版（細い墨線）と色版（明るさの順）に色分解して作っています。
+さらに `tools/freshen.py` で、紙の黄ばみ・褪色・染み・墨のかすれを修復し、摺りたての色にしています（`assets/fresh/`）。
 
 ## 構成
 
@@ -66,6 +67,8 @@ js/meisaku.js       出題する作品の一覧（この順に出題）
 js/render.js        摺りの描画エンジン（和紙・木目・摺りムラ）
 js/game.js          ゲーム本体（版選び・摺り・判定・画廊）
 assets/originals/   原画（CC0）
+assets/fresh/       摺りたての色に修復した版の色
 assets/plates/      原画の色分解ラベル画像
 tools/separate.py   原画を主版と色版に色分解するツール
+tools/freshen.py    色分解した版を摺りたての色に修復するツール
 ```

@@ -281,15 +281,13 @@
   function drawPlay(g) {
     bgWood(g);
     if (P.phase === 'intro') { drawGoal(g, true); return; }
-    if (P.phase === 'pick') {
-      drawGoal(g, true);
-      if (P.picked.length) {
-        const iw = W * 0.34, ih = iw * P.base.height / P.base.width, ix = W - iw - 2, iy = H - ih - 2;
-        g.save(); g.shadowColor = 'rgba(0,0,0,0.5)'; g.shadowBlur = 10; g.drawImage(P.base, ix, iy, iw, ih); g.restore();
-        g.strokeStyle = '#2b2622'; g.lineWidth = 2; g.strokeRect(ix, iy, iw, ih);
-        g.fillStyle = 'rgba(36,32,29,0.85)'; g.fillRect(ix, iy - 18, 92, 18);
-        g.fillStyle = '#fff'; g.font = `700 12px ${R.FONT}`; g.textBaseline = 'middle'; g.textAlign = 'left'; g.fillText(`いまの摺り（${P.picked.length}版）`, ix + 6, iy - 9);
-      }
+    if (P.phase === 'pick') {                                       // 完成図は最初だけ。選ぶ間は摺りかけの紙を見せる
+      g.save(); g.shadowColor = 'rgba(0,0,0,0.35)'; g.shadowBlur = 12; g.shadowOffsetY = 4;
+      g.drawImage(P.base, PAPER.x, PAPER.y, PAPER.w, PAPER.h); g.restore();
+      const label = P.picked.length ? `いまの摺り（${P.picked.length}版）` : 'まだ何も摺っていない紙';
+      g.save(); g.font = `700 14px ${R.FONT}`; const tw = g.measureText(label).width + 20;
+      g.fillStyle = 'rgba(36,32,29,0.85)'; g.fillRect(PAPER.x, PAPER.y, tw, 24);
+      g.fillStyle = '#fff'; g.textBaseline = 'middle'; g.textAlign = 'left'; g.fillText(label, PAPER.x + 10, PAPER.y + 12); g.restore();
       return;
     }
     g.save(); g.shadowColor = 'rgba(0,0,0,0.35)'; g.shadowBlur = 12; g.shadowOffsetY = 4;

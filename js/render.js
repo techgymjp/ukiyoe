@@ -33,7 +33,7 @@ const R = (() => {
       const c = mk(w, h), g = c.getContext('2d');
       g.fillStyle = color; g.fillRect(0, 0, w, h);
       const gr = g.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.2, w / 2, h / 2, Math.max(w, h) * 0.75);
-      gr.addColorStop(0, 'rgba(255,250,235,0.35)'); gr.addColorStop(1, 'rgba(160,125,80,0.16)');
+      gr.addColorStop(0, 'rgba(255,255,250,0.3)'); gr.addColorStop(1, 'rgba(200,180,150,0.06)');
       g.fillStyle = gr; g.fillRect(0, 0, w, h);
       g.drawImage(fibers(w, h, 3), 0, 0);
       return c;
@@ -127,10 +127,12 @@ const R = (() => {
       const lc = mk(w, h), lg = lc.getContext('2d'); lg.drawImage(lab, 0, 0);
       const ld = lg.getImageData(0, 0, w, h).data, labels = new Uint8Array(w * h);
       for (let i = 0; i < w * h; i++) labels[i] = Math.round(ld[i * 4] / 30);
-      d._ras = { w, h, labels, img: ig.getImageData(0, 0, w, h), canvas: ic, plates: {}, sil: {} };
+      const im = ig.getImageData(0, 0, w, h);   // assets/fresh：tools/freshen.py で摺りたての色に修復済み
+      d._ras = { w, h, labels, img: im, canvas: ic, plates: {}, sil: {} };
     });
     return d._rs;
   }
+  const FRESH_PAPER = '#f7f2e5';
   function plate(d, label) {
     const r = d._ras;
     if (!r.plates[label]) {
@@ -236,7 +238,7 @@ const R = (() => {
     g.drawImage(coverMask(res.cov, GW, GH), 0, 0, c.width, c.height);
     const lack = Math.max(0, 0.42 - res.amount) / 0.42;
     g.globalCompositeOperation = 'destination-out';
-    g.globalAlpha = 0.1 + 0.5 * lack;
+    g.globalAlpha = 0.04 + 0.5 * lack;
     g.drawImage(grain(c.width, c.height), 0, 0);
     g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1;
     return c;
@@ -262,7 +264,7 @@ const R = (() => {
   function render(d, st, opt) {
     const S = opt.S, { W: DW, H: DH } = dims(d), W = Math.round((DW + 2 * M) * S), H = Math.round((DH + 2 * M) * S);
     const out = mk(W, H), o = out.getContext('2d');
-    o.drawImage(paper(W, H, d.paper), 0, 0);
+    o.drawImage(paper(W, H, d.raster ? FRESH_PAPER : d.paper), 0, 0);
     const upto = opt.upto ?? st.blocks.length - 1;
     let keyIdx = -1;
     st.blocks.forEach((b, i) => {
@@ -286,7 +288,7 @@ const R = (() => {
       o.drawImage(k, (M + res.dx) * S, (M + res.dy) * S);
       o.globalCompositeOperation = 'source-over'; o.globalAlpha = 1;
     }
-    o.globalAlpha = 0.45; o.drawImage(fibers(W, H, 17, 0.6), 0, 0); o.globalAlpha = 1;
+    o.globalAlpha = 0.18; o.drawImage(fibers(W, H, 17, 0.6), 0, 0); o.globalAlpha = 1;
     if (opt.sign) {
       o.save(); o.translate(M * S, M * S); o.scale(S, S);
       if (d.raster) { seal(o, d.seal.x, d.seal.y, 14, [...opt.sign][0] || '印'); o.restore(); return out; }
