@@ -239,7 +239,7 @@ const R = (() => {
   }
   const signText = (d, name) => d.artistSign || (name + '画');
   function strength(res) { return res.amount < 0.42 ? 0.5 + 0.5 * (res.amount / 0.42) : 1; }
-  function finish(c, res, d) {
+  function finish(c, res, d, crisp = false) {
     const { GW, GH } = dims(d);
     const g = c.getContext('2d');
     g.setTransform(1, 0, 0, 1, 0, 0);
@@ -256,7 +256,7 @@ const R = (() => {
     g.drawImage(coverMask(res.cov, GW, GH), 0, 0, c.width, c.height);
     const lack = Math.max(0, 0.42 - res.amount) / 0.42;
     g.globalCompositeOperation = 'destination-out';
-    g.globalAlpha = 0.04 + 0.5 * lack;
+    g.globalAlpha = (crisp ? 0 : 0.04) + 0.5 * lack;   // 名作の墨線はくっきり（下の色が透けない）
     g.drawImage(grain(c.width, c.height), 0, 0);
     g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1;
     return c;
@@ -290,7 +290,12 @@ const R = (() => {
     order.forEach(i => {
       const b = st.blocks[i], res = st.results[i];
       if (i > upto || !res || res.amount == null) return;
-      if (b.kind === 'key') { keyIdx = i; return; }
+      if (b.kind === 'key') {
+        if (!d.raster) { keyIdx = i; return; }                  // 創作図案は墨線を最後に重ねる
+        const k = finish(keyLayer(d, st, S, { sign: opt.sign }), res, d, true);   // 名作は摺った順番どおりに重ねる
+        o.globalAlpha = strength(res) * 0.96; o.drawImage(k, (M + res.dx) * S, (M + res.dy) * S); o.globalAlpha = 1;
+        return;
+      }
       const c = finish(colorLayer(d, b.region, regionHex(b.region), S), res, d);
       o.globalAlpha = strength(res);
       o.drawImage(c, (M + res.dx) * S, (M + res.dy) * S);

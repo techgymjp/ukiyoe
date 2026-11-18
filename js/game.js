@@ -116,13 +116,12 @@
     st.results = saved;
     return c;
   }
-  /* 摺る順番の決まり：主版（墨線）が最初。色版は、その下に敷かれる色版（after）を摺り終えていれば摺れる
+  /* 摺る順番の決まり：下の層から摺る。その版の下に敷かれる版（after）を摺り終えていれば摺れる。
+     主版（墨線）は一番上の層なので、線の下に敷かれる色版（keyAfter）を摺り終えてから
      （下の版を後から摺ると、上の版が隠れてしまう。tools/layers.py で作品ごとに求めて検証済み） */
   function canPrint(k, picked = P.picked) {
     if (picked.includes(k)) return false;
-    if (k === 0) return picked.length === 0;
-    if (!picked.includes(0)) return false;
-    const under = G.st.blocks[k].region.after || [];
+    const under = k === 0 ? (G.design.keyAfter || []) : (G.st.blocks[k].region.after || []);
     return under.every(lab => picked.includes(G.st.blocks.findIndex(b => b.region && b.region.label === lab)));
   }
   const nextValid = () => G.st.blocks.findIndex((_, k) => canPrint(k));
@@ -178,6 +177,7 @@
   function toPick() {
     clearTimeout(P.timer);
     if (P.phase !== 'intro') return;
+    P.expect = nextValid();
     P.phase = 'pick'; panelPick();
   }
   function setPicking(on) { if (document.body.classList.contains('picking') !== on) { document.body.classList.toggle('picking', on); requestAnimationFrame(resize); } }
@@ -189,7 +189,7 @@
     const k = cs[P.view];
     if (P.pickFor !== P.picked.length) { P.pickFor = P.picked.length; P.pickT0 = performance.now(); }
     P.preview = k;
-    panel.innerHTML = `<p class="howto">第<b>${P.picked.length + 1}</b>版 / 全${n}版：<b>次に摺る版</b>はどれ？<br><small>めくると、摺った時の色が紙にうっすら映ります。主版が最初。色版は、ほかの版の下に敷かれる版から。</small></p>
+    panel.innerHTML = `<p class="howto">第<b>${P.picked.length + 1}</b>版 / 全${n}版：<b>次に摺る版</b>はどれ？<br><small>めくると、摺った時の色が紙にうっすら映ります。下に敷かれる版から先に。墨の線は一番上。</small></p>
       <div class="ptime"><div id="pk-time"></div><span id="pk-bonus"></span></div>
       <div class="cand">
         <button class="cand-nav" id="b-prev" aria-label="前の版" ${cs.length < 2 ? 'disabled' : ''}>◀</button>
@@ -285,7 +285,7 @@
     const th = thumbs(G.design, G.st);
     panel.innerHTML = `<div class="role"><span class="role-seal">終</span>${G.design.title}</div>
       <p class="howto">下に敷く版より先に、上の版を摺ってしまいました。正しい順番の例：</p>
-      <div class="blocks answer">${G.st.blocks.map((b, k) => `<div class="blockcard"><img src="${th[k]}" alt=""><span>${k + 1}番目</span></div>`).join('')}</div>
+      <div class="blocks answer">${G.st.blocks.map((_, k) => k).slice(1).concat(0).map((k, n) => `<div class="blockcard"><img src="${th[k]}" alt=""><span>${n + 1}番目</span></div>`).join('')}</div>
       <div class="controls"><button class="btn primary big" id="b-retry">この図からやり直す</button></div>
       <div class="controls"><button class="btn" id="b-share">シェア</button><button class="btn" id="b-title">タイトルへ</button></div>`;
     $('#b-retry').onclick = withAd(() => startStage(G.idx));
