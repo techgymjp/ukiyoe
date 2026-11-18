@@ -88,7 +88,7 @@
     phase: 'intro', expect: 0, picked: [], order: [], rubs: [], goal: null, base: null, current: -1,
     cov: null, full: null, tmp: null, covCv: null, dirty: true, last: null, hover: null, started: false, finalCv: null, timer: 0,
   };
-  const RUB_R = 42, RUB_K = 0.021;
+  let RUB_R = 90; const RUB_K = 0.02;   // 大きなばれんで、ひとなでで色が移る
   const covMean = () => { let s = 0; for (const v of P.cov) s += Math.min(1, v); return s / P.cov.length; };
   function newState(d) {
     return { blocks: [{ kind: 'key', name: '主版（墨線）' }].concat(d.regions.map(r => ({ kind: 'color', region: r, name: r.name }))), results: [], carve: [], strokes: [] };
@@ -139,6 +139,7 @@
       $('#b-title').onclick = toTitle; return;
     }
     G.design = d; setDims(d);
+    RUB_R = Math.round(Math.max(W, H) * 0.17);
     G.st = newState(d);
     Object.assign(P, { phase: 'intro', expect: 0, picked: [], rubs: [], hover: null, finalCv: null, current: -1, view: 0, pickFor: -1, bonusSum: 0, layers: {} });
     P.order = G.st.blocks.map((_, k) => k).sort(() => Math.random() - 0.5);
@@ -381,7 +382,7 @@
   });
   const endP = () => {
     if (!pDown) return; pDown = false; P.last = null; Sfx.rubStop();
-    if (P.phase === 'rub' && P.started && covMean() >= 0.93) finishRub();
+    if (P.phase === 'rub' && P.started && covMean() >= 0.85) finishRub();
   };
   cv.addEventListener('pointerup', endP);
   cv.addEventListener('pointercancel', endP);

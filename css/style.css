@@ -167,7 +167,7 @@ body[data-screen="screen-title"] .steps, body[data-screen="screen-gallery"] .ste
   .steps li span { font-size: 11px; }
   .steps li.active { font-size: 12px; gap: 4px; padding: 3px 8px; }
   #screen-work.active { grid-template-columns: 1fr; grid-template-rows: auto auto; height: auto; padding: 8px 10px 24px; gap: 10px; }
-  .stage-wrap { height: 56vh; height: min(56dvh, calc((100vw - 20px) / var(--ar, 0.7))); }
+  .stage-wrap { height: 64vh; height: min(64dvh, calc((100vw - 20px) / var(--ar, 0.7))); }
   .panel { overflow: visible; }
   .flow li { min-width: 0; flex: 1 1 40%; }
 }
