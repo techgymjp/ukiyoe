@@ -1,6 +1,6 @@
 """色分解した浮世絵を「摺りたて」の状態に修復する。
 
-使い方: python3 tools/freshen.py <id> [<id> ...]
+使い方: python3 tools/freshen.py <id>[:keep] [<id> ...]
 入力:  assets/originals/<id>.jpg（原画）, assets/plates/<id>.png（ラベル×30）
 出力:  assets/fresh/<id>.jpg（ゲームで摺る色）
 
@@ -16,7 +16,7 @@ from scipy import ndimage as ndi
 FRESH_PAPER = np.array([247, 242, 229], float)
 INK = np.array([28, 25, 26], float)
 
-def freshen(pid):
+def freshen(pid, keep_light=False):
     rgb = np.asarray(Image.open(f'assets/originals/{pid}.jpg').convert('RGB')).astype(float)
     lab = np.round(np.asarray(Image.open(f'assets/plates/{pid}.png')).astype(float) / 30).astype(int)
     paper = rgb[lab == 0]
@@ -34,7 +34,7 @@ def freshen(pid):
         g = v.mean(1, keepdims=True); v = g + (v - g) * 1.35                       # 褪色を戻す
         if l != 1: v = 255 - (255 - v) / 0.94                                      # 絵の具の濃さ
         ml = mean @ np.array([0.3, 0.59, 0.11]); mc = mean.max() - mean.min()
-        if l != 1 and ml > 212 and mc < 32: v = FRESH_PAPER * 0.75 + v * 0.25     # 紙の黄ばみが版になった所は白い紙に
+        if not keep_light and l != 1 and ml > 212 and mc < 32: v = FRESH_PAPER * 0.75 + v * 0.25  # 紙の黄ばみが版になった所は白い紙に
         out[m] = v
     lum = out @ np.array([0.3, 0.59, 0.11])
     chroma = out.max(-1) - out.min(-1)
@@ -51,5 +51,6 @@ def freshen(pid):
     Image.fromarray(np.clip(out, 0, 255).astype(np.uint8)).save(f'assets/fresh/{pid}.jpg', quality=90)
     print(pid, 'aged paper', aged.astype(int))
 
-for pid in sys.argv[1:]:
-    freshen(pid)
+for arg in sys.argv[1:]:                     # 「id:keep」で淡い色の版を白くしない（淡い水色の川など）
+    pid, _, opt = arg.partition(':')
+    freshen(pid, keep_light=(opt == 'keep'))

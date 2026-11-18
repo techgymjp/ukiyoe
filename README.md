@@ -12,18 +12,30 @@
 4. **摺り上がり**：摺り上がった時に順番が違っていたら**ゲームオーバー**。
    全部正しければクリアで、自動的に**次の浮世絵**へ進みます。ムラなく摺れば「PERFECT!」で満点。
 
-タイトルからは作品を選ばず、次の順に出題されます（やさしい順）。
+タイトルからは作品を選ばず、次の順に出題されます（版の少ない、やさしい順）。
 
 | 図 | 作品 | 絵師 | ジャンル |
 |---|---|---|---|
-| 1 | 東海道五拾三次之内 蒲原 夜之雪 | 歌川広重 | 風景画 |
-| 2 | 冨嶽三十六景 凱風快晴 | 葛飾北斎 | 風景画 |
-| 3 | 婦女人相十品 ポッピンを吹く娘 | 喜多川歌麿 | 美人画 |
-| 4 | 冨嶽三十六景 神奈川沖浪裏 | 葛飾北斎 | 風景画 |
-| 5 | 三代目大谷鬼次の江戸兵衛 | 東洲斎写楽 | 役者絵（歌舞伎） |
-| 6 | 名所江戸百景 大はしあたけの夕立 | 歌川広重 | 風景画 |
-| 7 | 寛政三美人 | 喜多川歌麿 | 美人画 |
-| 8 | 市川鰕蔵の竹村定之進 | 東洲斎写楽 | 役者絵（歌舞伎） |
+| 1 | 日傘をさす女（婦女人相十品） | 喜多川歌麿 | 美人画 |
+| 2 | 蒲原 夜之雪（東海道五拾三次） | 歌川広重 | 風景画 |
+| 3 | 凱風快晴（冨嶽三十六景） | 葛飾北斎 | 風景画 |
+| 4 | ポッピンを吹く娘（婦女人相十品） | 喜多川歌麿 | 美人画 |
+| 5 | 甲州石班沢（冨嶽三十六景） | 葛飾北斎 | 風景画 |
+| 6 | 庄野 白雨（東海道五拾三次） | 歌川広重 | 風景画 |
+| 7 | 風の中の二人の娘 | 鈴木春信 | 美人画 |
+| 8 | 尾州不二見原（冨嶽三十六景） | 葛飾北斎 | 風景画 |
+| 9 | 二代目沢村淀五郎の川つら法眼と坂東善次の鬼佐渡坊 | 東洲斎写楽 | 役者絵（歌舞伎） |
+| 10 | 日本橋 朝之景（東海道五拾三次） | 歌川広重 | 風景画 |
+| 11 | 木曽路ノ奥阿弥陀ヶ滝（諸国瀧廻り） | 葛飾北斎 | 風景画 |
+| 12 | 浅草田甫酉の町詣（名所江戸百景） | 歌川広重 | 風景画 |
+| 13 | 大はしあたけの夕立（名所江戸百景） | 歌川広重 | 風景画 |
+| 14 | 神奈川沖浪裏（冨嶽三十六景） | 葛飾北斎 | 風景画 |
+| 15 | 三代目大谷鬼次の江戸兵衛 | 東洲斎写楽 | 役者絵（歌舞伎） |
+| 16 | 山下白雨（冨嶽三十六景） | 葛飾北斎 | 風景画 |
+| 17 | 寛政三美人 | 喜多川歌麿 | 美人画 |
+| 18 | 深川洲崎十万坪（名所江戸百景） | 歌川広重 | 風景画 |
+| 19 | 三代目沢村宗十郎の名護屋山三と三代目瀬川菊之丞の傾城かつらぎ | 東洲斎写楽 | 役者絵（歌舞伎） |
+| 20 | 市川鰕蔵の竹村定之進 | 東洲斎写楽 | 役者絵（歌舞伎） |
 
 摺り上げた作品は画廊に飾られます。BGM（箏と尺八風）と効果音は WebAudio でその場で合成しており、右上で切り替えられます。
 
@@ -41,15 +53,27 @@ python3 -m http.server 8000
 
 ## 原画のクレジット
 
-`assets/originals/` の画像は、メトロポリタン美術館（The Metropolitan Museum of Art）の Open Access によるパブリックドメイン（CC0）画像です。
+`assets/originals/` の画像は、メトロポリタン美術館（The Metropolitan Museum of Art）の Open Access によるパブリックドメイン（CC0）画像です（括弧内は所蔵番号）。
 
+- 喜多川歌麿「婦女人相十品 日傘をさす女」 The Howard Mansfield Collection, Purchase, Rogers Fund, 1936（JP2730）
 - 歌川広重「東海道五拾三次之内 蒲原 夜之雪」 The Howard Mansfield Collection, Purchase, Rogers Fund, 1936（JP2492）
 - 葛飾北斎「冨嶽三十六景 凱風快晴」 Rogers Fund, 1914（JP9）
 - 喜多川歌麿「婦女人相十品 ポッピンを吹く娘」 H. O. Havemeyer Collection, Bequest of Mrs. H. O. Havemeyer, 1929（JP1662）
+- 葛飾北斎「冨嶽三十六景 甲州石班沢」 The Howard Mansfield Collection, Purchase, Rogers Fund, 1936（JP2581）
+- 歌川広重「東海道五拾三次之内 庄野 白雨」 Rogers Fund, 1914（JP41）
+- 鈴木春信「風の中の二人の娘（Two Women in a Storm）」 The Howard Mansfield Collection, Purchase, Rogers Fund, 1936（JP2440）
+- 葛飾北斎「冨嶽三十六景 尾州不二見原」 Rogers Fund, 1914（JP19）
+- 東洲斎写楽「二代目沢村淀五郎の川つら法眼と坂東善次の鬼佐渡坊」 Harris Brisbane Dick Fund and Rogers Fund, 1949（JP3115）
+- 歌川広重「東海道五拾三次之内 日本橋 朝之景」 Rogers Fund, 1918（JP471）
+- 葛飾北斎「諸国瀧廻り 木曽路ノ奥阿弥陀ヶ滝」 Museum Accession（JP1085）
+- 歌川広重「名所江戸百景 浅草田甫酉の町詣」 Rogers Fund, 1914（JP60）
+- 歌川広重「名所江戸百景 大はしあたけの夕立」 The Howard Mansfield Collection, Purchase, Rogers Fund, 1936（JP2522）
 - 葛飾北斎「冨嶽三十六景 神奈川沖浪裏」 H. O. Havemeyer Collection, Bequest of Mrs. H. O. Havemeyer, 1929（JP1847）
 - 東洲斎写楽「三代目大谷鬼次の江戸兵衛」 Henry L. Phillips Collection, Bequest of Henry L. Phillips, 1939（JP2822）
-- 歌川広重「名所江戸百景 大はしあたけの夕立」 The Howard Mansfield Collection, Purchase, Rogers Fund, 1936（JP2522）
+- 葛飾北斎「冨嶽三十六景 山下白雨」 Rogers Fund, 1914（JP11）
 - 喜多川歌麿「寛政三美人」 Fletcher Fund, 1929（JP1528）
+- 歌川広重「名所江戸百景 深川洲崎十万坪」 The Howard Mansfield Collection, Purchase, Rogers Fund, 1936（JP2520）
+- 東洲斎写楽「三代目沢村宗十郎の名護屋山三と三代目瀬川菊之丞の傾城かつらぎ」 Harris Brisbane Dick Fund and Rogers Fund, 1949（JP3122）
 - 東洲斎写楽「市川鰕蔵の竹村定之進」 Harris Brisbane Dick Fund and Rogers Fund, 1949（JP3114）
 
 版は `tools/separate.py` で原画を主版（細い墨線）と色版（明るさの順）に色分解して作っています。
