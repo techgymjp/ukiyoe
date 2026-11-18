@@ -88,7 +88,7 @@
     phase: 'intro', expect: 0, picked: [], order: [], rubs: [], goal: null, base: null, current: -1,
     cov: null, full: null, tmp: null, covCv: null, dirty: true, last: null, hover: null, started: false, finalCv: null, timer: 0,
   };
-  let RUB_R = 90; const RUB_K = 0.02;   // 大きなばれんで、ひとなでで色が移る
+  let RUB_R = 90; const RUB_K = 0.04;   // 大きなばれんで、ひとなでで色が移る
   const covMean = () => { let s = 0; for (const v of P.cov) s += Math.min(1, v); return s / P.cov.length; };
   function newState(d) {
     return { blocks: [{ kind: 'key', name: '主版（墨線）' }].concat(d.regions.map(r => ({ kind: 'color', region: r, name: r.name }))), results: [], carve: [], strokes: [] };
@@ -202,7 +202,14 @@
       <p class="howto">ばれんで紙を<b>まんべんなくこすって</b>摺ろう。</p>
       <div class="meter"><div class="meter-fill" id="sr-fill"></div><span id="sr-txt"></span></div>
       <div class="controls"><button class="btn ghost" id="b-fin">摺り上げる</button></div>`;
-    $('#b-fin').onclick = finishRub;
+    $('#b-fin').onclick = () => (covMean() >= 0.6 ? completeRub() : finishRub());
+  }
+  /* 8割こすれたら残りを一気に摺り切って100%に */
+  function completeRub() {
+    if (P.phase !== 'rub' || P.completing) return;
+    P.completing = true; Sfx.rubStop();
+    P.cov.fill(1.2); P.dirty = true;
+    setTimeout(() => { P.completing = false; finishRub(); }, 350);
   }
   function finishRub() {
     if (P.phase !== 'rub') return;
@@ -363,7 +370,7 @@
       }
     }
     P.last = p; P.dirty = true;
-    if (covMean() >= 0.985) finishRub();
+    if (covMean() >= 0.8) completeRub();
   }
   cv.addEventListener('pointerdown', e => {
     Sfx.init(); e.preventDefault();
@@ -382,7 +389,7 @@
   });
   const endP = () => {
     if (!pDown) return; pDown = false; P.last = null; Sfx.rubStop();
-    if (P.phase === 'rub' && P.started && covMean() >= 0.85) finishRub();
+    if (P.phase === 'rub' && P.started && covMean() >= 0.6) completeRub();
   };
   cv.addEventListener('pointerup', endP);
   cv.addEventListener('pointercancel', endP);
