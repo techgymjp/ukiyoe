@@ -13,14 +13,7 @@
 <body data-screen="screen-title">
 <header class="topbar">
   <button class="brand" id="btn-home" title="表題へ"><span class="brand-seal">浮</span><span class="brand-text">浮世絵職人</span></button>
-  <ol class="steps" id="steps">
-    <li><span>壱</span>下絵</li>
-    <li><span>弐</span>色さし</li>
-    <li><span>参</span>彫り</li>
-    <li><span>四</span>見当</li>
-    <li><span>伍</span>摺り</li>
-    <li><span>六</span>落款</li>
-  </ol>
+  <div class="stagebar" id="stagebar"></div>
   <div class="top-actions">
     <button class="btn small" id="btn-gallery">画廊</button>
     <button class="btn small" id="btn-bgm" aria-pressed="true" title="BGM">♪<span class="hide-sm"> BGM</span></button>
@@ -32,22 +25,20 @@
   <section id="screen-title" class="screen">
     <div class="hero">
       <h1><span>浮</span><span>世</span><span>絵</span><span>職</span><span>人</span></h1>
-      <p class="lead">絵師が描き、彫師が彫り、摺師が摺る。<br>江戸の職人たちの技をなぞって、あなただけの一枚の錦絵を仕上げよう。</p>
+      <p class="lead">浮世絵は、何枚もの版木を一色ずつ摺り重ねてできています。<br>お手本を見て、<b>版を摺る順番</b>を見抜けるか。摺師の腕を試そう。</p>
+      <div class="start-btns">
+        <button class="btn primary big" id="btn-start">はじめる</button>
+        <button class="btn big" id="btn-continue" hidden>つづきから</button>
+      </div>
       <ol class="flow">
-        <li><b>壱 版下絵</b><span>絵師</span>輪郭をなぞる</li>
-        <li><b>弐 色さし</b><span>絵師</span>配色を覚えて合わせる</li>
-        <li><b>参 彫り</b><span>彫師</span>版木の線をなぞって彫る</li>
-        <li><b>四 見当</b><span>摺師</span>紙を目印に合わせる</li>
-        <li><b>伍 摺り</b><span>摺師</span>まんべんなく摺る</li>
-        <li><b>六 落款</b><span>絵師</span>印を押して完成</li>
+        <li><b>壱 お手本を見る</b>何枚の版でできているか</li>
+        <li><b>弐 版を選ぶ</b>次に摺る版はどれ？</li>
+        <li><b>参 自分で摺る</b>ばれんでまんべんなく</li>
+        <li><b>四 摺り上がり</b>順番ちがいはゲームオーバー</li>
       </ol>
-      <p class="lead small">どの工程も、正確なら「PERFECT!」で満点です。</p>
+      <p class="lead small">主版（墨の線）が最初、色は<b>薄い色→濃い色</b>。全部正しく摺れたら次の浮世絵へ。<br>北斎・広重の風景画、歌麿の美人画、写楽の役者絵（歌舞伎）が登場します。</p>
     </div>
-    <h2 class="sec">名作に挑む　北斎・広重</h2>
-    <div id="design-list-orig" class="cards"></div>
-    <h2 class="sec">創作図案</h2>
-    <div id="design-list" class="cards"></div>
-    <footer class="foot">北斎・広重の名作は、メトロポリタン美術館が公開するパブリックドメイン（CC0）の原画を色分解して版にしています。その他の図案はこのゲームのための創作です。マウス・タッチ操作に対応。</footer>
+    <footer class="foot">作品はすべてメトロポリタン美術館が公開するパブリックドメイン（CC0）の原画を色分解して版にしています。</footer>
   </section>
 
   <section id="screen-work" class="screen">

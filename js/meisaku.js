@@ -1,75 +1,37 @@
 'use strict';
-/* 名作4点：本物の原画を色分解した版で摺る（tools/separate.py で作成）
+/* 名作：原画を tools/separate.py で主版と色版に色分解したもの（この順に出題）
    原画：メトロポリタン美術館所蔵（パブリックドメイン / CC0） */
-(() => {
-  const MET = 'メトロポリタン美術館所蔵（パブリックドメイン / CC0）';
-  const plates = (list) => list.map(([label, name, hex]) => ({ id: 'p' + label, label, name, hex, z: label }));
-  const W = (id, o) => Object.assign({ id, raster: { image: `assets/originals/${id}.jpg`, labels: `assets/plates/${id}.png`, keyLabel: 1 }, original: `assets/originals/${id}.jpg` }, o);
-
-  const kanagawa = W('kanagawa', {
-    title: '神奈川沖浪裏', yomi: 'かながわおきなみうら', level: 3, w: 600, h: 400,
-    artist: '葛飾北斎', series: '冨嶽三十六景', paper: '#f2e9d2',
-    credit: `原画：葛飾北斎「冨嶽三十六景 神奈川沖浪裏」${MET}`,
-    desc: '世界で最も有名な浮世絵。大波の爪の向こうに小さな富士。',
-    seal: { x: 8, y: 122 },
-    lines: [
-      { name: 'うねりの背', d: 'M0 147 C 30 145, 60 132, 83 110 C 110 82, 140 50, 200 37 C 220 33, 240 38, 255 48' },
-      { name: '波頭', d: 'M255 48 C 290 60, 330 95, 350 140 C 356 158, 345 175, 330 175' },
-      { name: '波の内側', d: 'M245 75 C 250 110, 240 160, 245 200 C 250 230, 270 260, 300 282' },
-      { name: '谷の白波', d: 'M140 275 C 165 250, 185 228, 205 218 C 225 222, 245 248, 262 275' },
-      { name: '富士', d: 'M352 290 L 372 270 C 378 263, 382 258, 386 257 C 390 258, 395 264, 400 270 L 422 290' },
-      { name: '右の大波', d: 'M420 292 C 480 272, 545 228, 600 160' },
-      { name: '押送船', d: 'M245 300 C 285 335, 345 362, 440 370' },
-    ],
-    regions: plates([[2, '空', '#eddebf'], [3, '波の薄藍', '#c5d4c8'], [4, '雲と舟', '#d3c0a2'], [5, '空のぼかし', '#848785'], [6, '波の藍', '#3a6c8e'], [7, 'ベロ藍', '#23405f']]),
-  });
-
-  const gaifu = W('gaifu', {
-    title: '凱風快晴', yomi: 'がいふうかいせい', level: 2, w: 600, h: 400,
-    artist: '葛飾北斎', series: '冨嶽三十六景', paper: '#e8dabb',
-    credit: `原画：葛飾北斎「冨嶽三十六景 凱風快晴」${MET}`,
-    desc: '通称「赤富士」。朝日に染まる富士と鰯雲。',
-    seal: { x: 58, y: 132 },
-    lines: [
-      { name: '左の稜線', d: 'M0 342 C 100 310, 220 260, 300 210 C 360 162, 420 108, 452 77 L 481 77' },
-      { name: '右の稜線', d: 'M481 77 C 510 100, 550 130, 600 148' },
-      { name: '樹海', d: 'M0 330 C 80 310, 160 290, 220 290 C 300 300, 380 350, 450 400' },
-    ],
-    regions: plates([[2, '鰯雲', '#c4c1a9'], [3, '裾野', '#819289'], [4, '山肌（弁柄）', '#be7c69'], [5, '空の藍', '#48788f'], [6, '樹海', '#546067'], [7, '空の濃藍', '#204363']]),
-  });
-
-  const ohashi = W('ohashi', {
-    title: '大はしあたけの夕立', yomi: 'おおはしあたけのゆうだち', level: 2, w: 400, h: 600,
-    artist: '歌川広重', series: '名所江戸百景', paper: '#d8cfb4',
-    credit: `原画：歌川広重「名所江戸百景 大はしあたけの夕立」${MET}`,
-    desc: '突然の夕立に駆ける人々。ゴッホも模写した雨の名作。',
-    seal: { x: 50, y: 538 },
-    lines: [
-      { name: '対岸の森', d: 'M0 190 C 60 160, 150 160, 200 175 C 260 175, 320 200, 400 225' },
-      { name: '川岸', d: 'M0 205 C 120 210, 260 230, 400 255' },
-      { name: '筏', d: 'M25 318 L 200 328' },
-      { name: '欄干', d: 'M0 427 C 100 385, 250 350, 400 332' },
-      { name: '橋の縁', d: 'M0 530 C 110 465, 250 410, 400 375' },
-      { name: '橋脚', d: 'M262 420 L 266 585' },
-    ],
-    regions: plates([[2, '大橋', '#e1b887'], [3, '隅田川', '#98ac9e'], [4, '欄干の影', '#b3856c'], [5, '雨空', '#818985'], [6, '題箋の紅', '#c4524e'], [7, '橋脚と雨雲', '#5d5857']]),
-  });
-
-  const kanbara = W('kanbara', {
-    title: '蒲原 夜之雪', yomi: 'かんばら よるのゆき', level: 1, w: 600, h: 400,
-    artist: '歌川広重', series: '東海道五拾三次', paper: '#ece0c4',
-    credit: `原画：歌川広重「東海道五拾三次之内 蒲原 夜之雪」${MET}`,
-    desc: '音もなく雪の降り積もる夜の宿場。墨の濃淡だけで描く静けさ。',
-    seal: { x: 56, y: 300 },
-    lines: [
-      { name: '山の稜線', d: 'M60 150 C 100 140, 130 125, 150 120 C 170 110, 190 95, 210 98 C 240 100, 260 110, 300 150' },
-      { name: '左の崖', d: 'M10 40 C 40 120, 90 220, 150 330 L 175 400' },
-      { name: '宿の屋根', d: 'M300 230 C 305 200, 310 180, 320 168 L 395 168 C 403 185, 410 205, 415 230' },
-      { name: '右の家', d: 'M470 205 C 480 175, 490 160, 500 145 L 550 140 L 600 160' },
-      { name: '雪の道', d: 'M150 345 C 250 320, 400 290, 600 250' },
-    ],
-    regions: plates([[2, '夜の空気', '#cec4a9'], [3, '雪の陰', '#ada893'], [4, '旅人の柿色', '#ba8f7c'], [5, '薄墨', '#878277'], [6, '夜空の濃墨', '#68605c']]),
-  });
-
-  DESIGNS.unshift(kanagawa, gaifu, ohashi, kanbara);
-})();
+const MEISAKU = [
+  { id: 'kanbara', title: '蒲原 夜之雪', yomi: 'かんばら よるのゆき', artist: '歌川広重', series: '東海道五拾三次', genre: '風景画', w: 600, h: 400, paper: '#ecddbe',
+    raster: { image: 'assets/originals/kanbara.jpg', labels: 'assets/plates/kanbara.png', keyLabel: 1 }, original: 'assets/originals/kanbara.jpg', lines: [],
+    credit: '原画：歌川広重「東海道五拾三次之内 蒲原 夜之雪」メトロポリタン美術館所蔵（パブリックドメイン / CC0）', acc: 'The Howard Mansfield Collection, Purchase, Rogers Fund, 1936（JP2492）',
+    regions: [{ id: 'p2', label: 2, name: 'い版', hex: '#cac1a6', z: 2 }, { id: 'p3', label: 3, name: 'ろ版', hex: '#9b9585', z: 3 }, { id: 'p4', label: 4, name: 'は版', hex: '#6e6661', z: 4 }] },
+  { id: 'gaifu', title: '凱風快晴', yomi: 'がいふうかいせい', artist: '葛飾北斎', series: '冨嶽三十六景', genre: '風景画', w: 600, h: 400, paper: '#e7d6b6',
+    raster: { image: 'assets/originals/gaifu.jpg', labels: 'assets/plates/gaifu.png', keyLabel: 1 }, original: 'assets/originals/gaifu.jpg', lines: [],
+    credit: '原画：葛飾北斎「冨嶽三十六景 凱風快晴」メトロポリタン美術館所蔵（パブリックドメイン / CC0）', acc: 'Rogers Fund, 1914（JP9）',
+    regions: [{ id: 'p2', label: 2, name: 'い版', hex: '#b9baa4', z: 2 }, { id: 'p3', label: 3, name: 'ろ版', hex: '#ba7b69', z: 3 }, { id: 'p4', label: 4, name: 'は版', hex: '#476c7f', z: 4 }] },
+  { id: 'poppin', title: 'ポッピンを吹く娘', yomi: 'ぽっぴんをふくむすめ', artist: '喜多川歌麿', series: '婦女人相十品', genre: '美人画', w: 400, h: 600, paper: '#dcc4a8',
+    raster: { image: 'assets/originals/poppin.jpg', labels: 'assets/plates/poppin.png', keyLabel: 1 }, original: 'assets/originals/poppin.jpg', lines: [],
+    credit: '原画：喜多川歌麿「婦女人相十品 ポッピンを吹く娘」メトロポリタン美術館所蔵（パブリックドメイン / CC0）', acc: 'H. O. Havemeyer Collection, Bequest of Mrs. H. O. Havemeyer, 1929（JP1662）',
+    regions: [{ id: 'p2', label: 2, name: 'い版', hex: '#d2ad86', z: 2 }, { id: 'p3', label: 3, name: 'ろ版', hex: '#9b866b', z: 3 }, { id: 'p4', label: 4, name: 'は版', hex: '#46423d', z: 4 }] },
+  { id: 'kanagawa', title: '神奈川沖浪裏', yomi: 'かながわおきなみうら', artist: '葛飾北斎', series: '冨嶽三十六景', genre: '風景画', w: 600, h: 400, paper: '#f5eed7',
+    raster: { image: 'assets/originals/kanagawa.jpg', labels: 'assets/plates/kanagawa.png', keyLabel: 1 }, original: 'assets/originals/kanagawa.jpg', lines: [],
+    credit: '原画：葛飾北斎「冨嶽三十六景 神奈川沖浪裏」メトロポリタン美術館所蔵（パブリックドメイン / CC0）', acc: 'H. O. Havemeyer Collection, Bequest of Mrs. H. O. Havemeyer, 1929（JP1847）',
+    regions: [{ id: 'p2', label: 2, name: 'い版', hex: '#e0dcc4', z: 2 }, { id: 'p3', label: 3, name: 'ろ版', hex: '#d6c3a3', z: 3 }, { id: 'p4', label: 4, name: 'は版', hex: '#828786', z: 4 }, { id: 'p5', label: 5, name: 'に版', hex: '#2f5677', z: 5 }] },
+  { id: 'oniji', title: '三代目大谷鬼次の江戸兵衛', yomi: 'さんだいめおおたにおにじのえどべえ', artist: '東洲斎写楽', series: '役者大首絵', genre: '役者絵（歌舞伎）', w: 400, h: 600, paper: '#ead3b8',
+    raster: { image: 'assets/originals/oniji.jpg', labels: 'assets/plates/oniji.png', keyLabel: 1 }, original: 'assets/originals/oniji.jpg', lines: [],
+    credit: '原画：東洲斎写楽「三代目大谷鬼次の江戸兵衛」メトロポリタン美術館所蔵（パブリックドメイン / CC0）', acc: 'Henry L. Phillips Collection, Bequest of Henry L. Phillips, 1939（JP2822）',
+    regions: [{ id: 'p2', label: 2, name: 'い版', hex: '#d2b895', z: 2 }, { id: 'p3', label: 3, name: 'ろ版', hex: '#978b77', z: 3 }, { id: 'p4', label: 4, name: 'は版', hex: '#7f6c65', z: 4 }, { id: 'p5', label: 5, name: 'に版', hex: '#3c3d3b', z: 5 }] },
+  { id: 'ohashi', title: '大はしあたけの夕立', yomi: 'おおはしあたけのゆうだち', artist: '歌川広重', series: '名所江戸百景', genre: '風景画', w: 400, h: 600, paper: '#cec6ae',
+    raster: { image: 'assets/originals/ohashi.jpg', labels: 'assets/plates/ohashi.png', keyLabel: 1 }, original: 'assets/originals/ohashi.jpg', lines: [],
+    credit: '原画：歌川広重「名所江戸百景 大はしあたけの夕立」メトロポリタン美術館所蔵（パブリックドメイン / CC0）', acc: 'The Howard Mansfield Collection, Purchase, Rogers Fund, 1936（JP2522）',
+    regions: [{ id: 'p2', label: 2, name: 'い版', hex: '#afac94', z: 2 }, { id: 'p3', label: 3, name: 'ろ版', hex: '#848a85', z: 3 }, { id: 'p4', label: 4, name: 'は版', hex: '#645756', z: 4 }] },
+  { id: 'sanbijin', title: '寛政三美人', yomi: 'かんせいさんびじん', artist: '喜多川歌麿', series: '', genre: '美人画', w: 400, h: 600, paper: '#e6cdb0',
+    raster: { image: 'assets/originals/sanbijin.jpg', labels: 'assets/plates/sanbijin.png', keyLabel: 1 }, original: 'assets/originals/sanbijin.jpg', lines: [],
+    credit: '原画：喜多川歌麿「寛政三美人」メトロポリタン美術館所蔵（パブリックドメイン / CC0）', acc: 'Fletcher Fund, 1929（JP1528）',
+    regions: [{ id: 'p2', label: 2, name: 'い版', hex: '#dac1a1', z: 2 }, { id: 'p3', label: 3, name: 'ろ版', hex: '#b79f7d', z: 3 }, { id: 'p4', label: 4, name: 'は版', hex: '#8c7e71', z: 4 }, { id: 'p5', label: 5, name: 'に版', hex: '#44423e', z: 5 }] },
+  { id: 'ebizo', title: '市川鰕蔵の竹村定之進', yomi: 'いちかわえびぞうのたけむらさだのしん', artist: '東洲斎写楽', series: '役者大首絵', genre: '役者絵（歌舞伎）', w: 400, h: 600, paper: '#dbc2aa',
+    raster: { image: 'assets/originals/ebizo.jpg', labels: 'assets/plates/ebizo.png', keyLabel: 1 }, original: 'assets/originals/ebizo.jpg', lines: [],
+    credit: '原画：東洲斎写楽「市川鰕蔵の竹村定之進」メトロポリタン美術館所蔵（パブリックドメイン / CC0）', acc: 'Harris Brisbane Dick Fund and Rogers Fund, 1949（JP3114）',
+    regions: [{ id: 'p2', label: 2, name: 'い版', hex: '#c1a88c', z: 2 }, { id: 'p3', label: 3, name: 'ろ版', hex: '#b87663', z: 3 }, { id: 'p4', label: 4, name: 'は版', hex: '#6f6362', z: 4 }, { id: 'p5', label: 5, name: 'に版', hex: '#383836', z: 5 }] },
+];

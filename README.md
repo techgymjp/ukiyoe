@@ -1,44 +1,35 @@
 # 浮世絵職人
 
-絵師・彫師・摺師、江戸の職人たちの作業工程をなぞって一枚の錦絵（浮世絵）を仕上げるWEBゲームです。
+浮世絵は、何枚もの版木を一色ずつ摺り重ねてできています。
+お手本の浮世絵を見て**版（レイヤー）を摺る順番**を見抜き、自分の手で摺り上げるWEBゲームです。
 
 ## 遊び方
 
-| 工程 | 職人 | ゲーム |
-|---|---|---|
-| 壱 版下絵 | 絵師 | 赤い点線の輪郭をなぞる |
-| 弐 色さし | 絵師 | 完成の配色を覚え、光った部分の色を4択で合わせる |
-| 参 彫り | 彫師 | 版木（左右反転）の線をなぞって彫る。線から外れると欠ける |
-| 四 見当 | 摺師 | 紙をドラッグして版木の目印（鉤）に合わせる |
-| 伍 摺り | 摺師 | ばれんで紙をまんべんなくこする。こすった所から絵が現れる |
-| 六 落款 | 絵師 | タップで印を押して完成。採点・保存・画廊・増し摺り・原画と比較 |
+1. **お手本を見る**：その浮世絵が何枚の版でできているかが示されます。
+2. **版を選ぶ**：並んだ版木（順番はばらばら）から、次に摺る版を選びます。
+   主版（墨の線）が最初、色は**薄い色→濃い色**の順。
+3. **自分で摺る**：摺りモードになり、ばれんで紙をまんべんなくこすると、その版の色が紙に移ります。
+4. **摺り上がり**：摺り上がった時に順番が違っていたら**ゲームオーバー**。
+   全部正しければクリアで、自動的に**次の浮世絵**へ進みます。ムラなく摺れば「PERFECT!」で満点。
 
-どの工程も、正確なら「PERFECT!」の演出が出て満点。終わると自動で次の工程へ進みます。
+タイトルからは作品を選ばず、次の順に出題されます（やさしい順）。
 
-雑になでると、彫りの欠け・見当ずれ・摺りムラ・掠れがそのまま完成した絵に表れます。
+| 図 | 作品 | 絵師 | ジャンル |
+|---|---|---|---|
+| 1 | 東海道五拾三次之内 蒲原 夜之雪 | 歌川広重 | 風景画 |
+| 2 | 冨嶽三十六景 凱風快晴 | 葛飾北斎 | 風景画 |
+| 3 | 婦女人相十品 ポッピンを吹く娘 | 喜多川歌麿 | 美人画 |
+| 4 | 冨嶽三十六景 神奈川沖浪裏 | 葛飾北斎 | 風景画 |
+| 5 | 三代目大谷鬼次の江戸兵衛 | 東洲斎写楽 | 役者絵（歌舞伎） |
+| 6 | 名所江戸百景 大はしあたけの夕立 | 歌川広重 | 風景画 |
+| 7 | 寛政三美人 | 喜多川歌麿 | 美人画 |
+| 8 | 市川鰕蔵の竹村定之進 | 東洲斎写楽 | 役者絵（歌舞伎） |
 
-### 画題
-
-- **名作に挑む**：葛飾北斎『冨嶽三十六景』より「神奈川沖浪裏」「凱風快晴」、歌川広重『名所江戸百景』より「大はしあたけの夕立」、『東海道五拾三次』より「蒲原 夜之雪」。
-  原画を `tools/separate.py` で主版（線）と色版に色分解しているため、うまく摺れば原画そっくりの一枚が摺り上がります。完成後に原画と見比べられます。
-- **創作図案**：「月下夜桜」「霞富士帆影」「蓮池遊鯉」（このゲームのためのオリジナル図案）
-
-### 原画のクレジット
-
-`assets/originals/` の画像は、メトロポリタン美術館（The Metropolitan Museum of Art）の Open Access によるパブリックドメイン（CC0）画像です。
-
-- 葛飾北斎「冨嶽三十六景 神奈川沖浪裏」 H. O. Havemeyer Collection, Bequest of Mrs. H. O. Havemeyer, 1929（JP1847）
-- 葛飾北斎「冨嶽三十六景 凱風快晴」 Rogers Fund, 1914（JP9）
-- 歌川広重「名所江戸百景 大はしあたけの夕立」 The Howard Mansfield Collection, Purchase, Rogers Fund, 1936（JP2522）
-- 歌川広重「東海道五拾三次之内 蒲原 夜之雪」 The Howard Mansfield Collection, Purchase, Rogers Fund, 1936（JP2492）
-
-### 音
-
-BGM（箏と尺八風の音による都節音階の即興）と効果音は WebAudio でその場で合成しています。音源ファイルはありません。画面右上で BGM・効果音を個別に切り替えられます。
+摺り上げた作品は画廊に飾られます。BGM（箏と尺八風）と効果音は WebAudio でその場で合成しており、右上で切り替えられます。
 
 ## 実行
 
-ビルド不要の静的サイトです。名作の版は画像を解析するため、Webサーバー経由で開いてください（GitHub Pages ならそのまま動きます）。
+ビルド不要の静的サイトです。版を作るために画像を解析するので、Webサーバー経由で開いてください（GitHub Pages ならそのまま動きます）。
 
 ```bash
 python3 -m http.server 8000
@@ -46,23 +37,34 @@ python3 -m http.server 8000
 
 ## GitHub Pages で公開
 
-リポジトリの **Settings → Pages** で
-- Source: `Deploy from a branch`
-- Branch: `main` / `/ (root)`
+リポジトリの **Settings → Pages** で Source を `Deploy from a branch`、Branch を `main` / `/ (root)` にして保存します。
 
-を選んで保存すると、`https://<ユーザー名>.github.io/<リポジトリ名>/` で公開されます。
+## 原画のクレジット
+
+`assets/originals/` の画像は、メトロポリタン美術館（The Metropolitan Museum of Art）の Open Access によるパブリックドメイン（CC0）画像です。
+
+- 歌川広重「東海道五拾三次之内 蒲原 夜之雪」 The Howard Mansfield Collection, Purchase, Rogers Fund, 1936（JP2492）
+- 葛飾北斎「冨嶽三十六景 凱風快晴」 Rogers Fund, 1914（JP9）
+- 喜多川歌麿「婦女人相十品 ポッピンを吹く娘」 H. O. Havemeyer Collection, Bequest of Mrs. H. O. Havemeyer, 1929（JP1662）
+- 葛飾北斎「冨嶽三十六景 神奈川沖浪裏」 H. O. Havemeyer Collection, Bequest of Mrs. H. O. Havemeyer, 1929（JP1847）
+- 東洲斎写楽「三代目大谷鬼次の江戸兵衛」 Henry L. Phillips Collection, Bequest of Henry L. Phillips, 1939（JP2822）
+- 歌川広重「名所江戸百景 大はしあたけの夕立」 The Howard Mansfield Collection, Purchase, Rogers Fund, 1936（JP2522）
+- 喜多川歌麿「寛政三美人」 Fletcher Fund, 1929（JP1528）
+- 東洲斎写楽「市川鰕蔵の竹村定之進」 Harris Brisbane Dick Fund and Rogers Fund, 1949（JP3114）
+
+版は `tools/separate.py` で原画を主版（細い墨線）と色版（明るさの順）に色分解して作っています。
 
 ## 構成
 
 ```
-index.html      画面構成
-css/style.css   スタイル
-js/util.js      汎用関数・効果音（WebAudio）
-js/designs.js   顔料と創作図案のデータ（SVGパス）
-js/meisaku.js   名作4点（北斎・広重）のデータ
-assets/originals/  原画（CC0）
-assets/plates/     原画の色分解ラベル画像
-tools/separate.py  原画を主版と色版に色分解するツール
-js/render.js    錦絵の描画エンジン（和紙・木目・摺りムラ・見当ずれ）
-js/game.js      各工程のゲームロジック
+index.html          画面構成
+css/style.css       スタイル
+js/util.js          汎用関数・効果音とBGM（WebAudio）
+js/designs.js       顔料の色
+js/meisaku.js       出題する作品の一覧（この順に出題）
+js/render.js        摺りの描画エンジン（和紙・木目・摺りムラ）
+js/game.js          ゲーム本体（版選び・摺り・判定・画廊）
+assets/originals/   原画（CC0）
+assets/plates/      原画の色分解ラベル画像
+tools/separate.py   原画を主版と色版に色分解するツール
 ```

@@ -71,6 +71,17 @@ def main():
     X = lab[rest]
     sub = X[np.random.default_rng(1).choice(len(X), min(60000, len(X)), replace=False)]
     C = kmeans(sub, k)
+    # 明るさの近すぎる版は統合する（「薄い色→濃い色」の順が目で判断できるように）
+    mingap = float(opts.get('mingap', 9))
+    while len(C) > 1:
+        cnt = np.bincount(((sub[:, None] - C[None]) ** 2).sum(-1).argmin(1), minlength=len(C)).astype(float) + 1
+        o = np.argsort(-C[:, 0]); Ls = C[o, 0]; gaps = -np.diff(Ls)
+        j = int(np.argmin(gaps))
+        if gaps[j] >= mingap: break
+        a_, b_ = o[j], o[j + 1]
+        merged = (C[a_] * cnt[a_] + C[b_] * cnt[b_]) / (cnt[a_] + cnt[b_])
+        C = np.vstack([np.delete(C, [a_, b_], axis=0), merged])
+    k = len(C)
     order = np.argsort(-C[:, 0])  # 淡い色から
     C = C[order]
     lbl = np.zeros(L.shape, np.uint8)
@@ -83,7 +94,9 @@ def main():
     info = {'paper': '#%02x%02x%02x' % tuple(rgb[lbl == 0].mean(0).astype(int)) if (lbl == 0).any() else None, 'plates': []}
     for i in range(1, k + 2):
         m = lbl == i
-        info['plates'].append({'label': i, 'hex': '#%02x%02x%02x' % tuple(rgb[m].mean(0).astype(int)), 'area': round(float(m.mean()), 4)})
+        info['plates'].append({'label': i, 'hex': '#%02x%02x%02x' % tuple(rgb[m].mean(0).astype(int)), 'L': round(float(L[m].mean()), 1), 'area': round(float(m.mean()), 4)})
+    info['w'], info['h'] = W, H
+    json.dump(info, open(f'assets/plates/{pid}.json', 'w'), ensure_ascii=False)
     print(json.dumps(info, ensure_ascii=False))
     # 確認用の色分解プレビュー
     pal = np.array([[255, 255, 255]] + [[int(p['hex'][j:j + 2], 16) for j in (1, 3, 5)] for p in info['plates']], np.uint8)
