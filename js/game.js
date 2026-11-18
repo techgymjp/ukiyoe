@@ -35,6 +35,8 @@
     cv.width = Math.round(VW * s * dpr); cv.height = Math.round(VH * s * dpr);
   }
   window.addEventListener('resize', resize);
+  // パネルの中身が変わって盤面の大きさが変わった時も描き直す
+  if (window.ResizeObserver) new ResizeObserver(() => resize()).observe(cv.parentElement);
   function show(id) {
     if (id !== 'screen-work') { const pz = document.getElementById('pause'); if (pz) pz.hidden = true; }
     document.querySelectorAll('.screen').forEach(e => e.classList.toggle('active', e.id === id));
@@ -560,7 +562,7 @@
     const play = inPlay() && $('#pause').hidden;
     const result = document.body.dataset.screen === 'screen-work' && ['clear', 'over', 'end'].includes(P.phase);
     document.body.classList.toggle('playing', play);
-    document.body.classList.toggle('result', result);
+    document.body.classList.toggle('is-result', result);
     Ads.setBanner(!play);
   }
   // タイトル画面：ビルド番号（アプリのみ）と、EU など同意が必要な地域での「広告の設定」
