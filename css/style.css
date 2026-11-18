@@ -275,3 +275,11 @@ a.brand { text-decoration: none; }
 .howto-steps strong { display: block; font-size: 17px; }
 .howto-tips { padding-left: 1.2em; margin: 0; }
 .howto-back { text-align: center; margin-top: 30px; }
+
+/* 早さボーナス・連続正解・ハイスコア */
+.ptime { position: relative; height: 22px; border-radius: 11px; background: rgba(36,32,29,.12); overflow: hidden; margin: 4px 0 6px; }
+.ptime > div { position: absolute; inset: 0 auto 0 0; background: linear-gradient(90deg, #e0a52a, #ffd75a); transition: width .1s linear; }
+.ptime > div.low { background: linear-gradient(90deg, #c8442f, #e8703a); }
+.ptime span { position: relative; display: block; text-align: center; font-size: 12px; line-height: 22px; font-weight: 700; }
+.stagebar em { font-style: normal; color: #fff; background: var(--shu); padding: 0 8px; border-radius: 10px; font-size: 13px; }
+.hiscore { text-align: center; font-weight: 700; color: var(--shu-d); margin: 0 0 10px; min-height: 1em; }

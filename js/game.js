@@ -10,7 +10,8 @@
   const cv = $('#cv'), ctx = cv.getContext('2d'), panel = $('#panel');
   const PAPER = { x: -M, y: -M, w: 400 + 2 * M, h: 600 + 2 * M };
   let scale = 1, dpr = 1, texWood = null;
-  const G = { idx: 0, design: null, st: null, total: 0, playing: false };
+  const G = { idx: 0, design: null, st: null, total: 0, combo: 0, playing: false };
+  const PICK_SEC = 15, HIKEY = 'ukiyoe-shokunin-best';
   window.UKIYOE = G;
   const STAGES = MEISAKU;
 
@@ -41,7 +42,7 @@
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const bgWood = g => g.drawImage(texWood, -OX, -OY, VW, VH);
   function stageBar() {
-    $('#stagebar').innerHTML = G.design ? `<b>第${G.idx + 1}図</b> / 全${STAGES.length}図<span>得点 ${G.total}</span>` : '';
+    $('#stagebar').innerHTML = G.design ? `<b>第${G.idx + 1}図</b> / 全${STAGES.length}図<span>得点 ${G.total}</span>${G.combo > 1 ? `<em>${G.combo}連続</em>` : ''}` : '';
   }
   const PREF = 'ukiyoe-shokunin-progress';
   const pref = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) { return null; } };
@@ -139,7 +140,7 @@
     }
     G.design = d; setDims(d);
     G.st = newState(d);
-    Object.assign(P, { phase: 'intro', expect: 0, picked: [], rubs: [], hover: null, finalCv: null, current: -1, view: 0 });
+    Object.assign(P, { phase: 'intro', expect: 0, picked: [], rubs: [], hover: null, finalCv: null, current: -1, view: 0, pickFor: -1, bonusSum: 0, layers: {} });
     P.order = G.st.blocks.map((_, k) => k).sort(() => Math.random() - 0.5);
     if (P.order[0] === 0) P.order.push(P.order.shift());   // 主版がいつも左端にならないように
     P.goal = R.render(d, idealState(d), { S: 1.5 });
@@ -165,7 +166,10 @@
     setPicking(true);
     P.view = U.clamp(P.view || 0, 0, cs.length - 1);
     const k = cs[P.view];
-    panel.innerHTML = `<p class="howto">第<b>${P.picked.length + 1}</b>版 / 全${n}版：<b>次に摺る版</b>はどれ？<br><small>主版（墨の線）が最初。色は薄い色→濃い色の順。</small></p>
+    if (P.pickFor !== P.picked.length) { P.pickFor = P.picked.length; P.pickT0 = performance.now(); }
+    P.preview = k;
+    panel.innerHTML = `<p class="howto">第<b>${P.picked.length + 1}</b>版 / 全${n}版：<b>次に摺る版</b>はどれ？<br><small>めくると、摺った時の色が紙にうっすら映ります。主版が最初、色は薄い→濃い。</small></p>
+      <div class="ptime"><div id="pk-time"></div><span id="pk-bonus"></span></div>
       <div class="cand">
         <button class="cand-nav" id="b-prev" aria-label="前の版" ${cs.length < 2 ? 'disabled' : ''}>◀</button>
         <div class="cand-card" id="cand"><img src="${th[k]}" alt="版木"><span>${P.view + 1} / ${cs.length}</span></div>
@@ -182,8 +186,10 @@
     card.addEventListener('pointerup', e => { if (sx == null) return; const dx = e.clientX - sx; sx = null; if (Math.abs(dx) > 30) flip(dx < 0 ? 1 : -1); });
     P.flip = flip;
   }
+  const pickLeft = () => Math.max(0, PICK_SEC - (performance.now() - P.pickT0) / 1000);
   function pickBlock(k) {
     if (P.phase !== 'pick' || P.picked.includes(k)) return;
+    P.pickBonus = Math.round(50 * pickLeft() / PICK_SEC);
     Sfx.play('tap'); setPicking(false);
     G.st.results[k] = { amount: 0.5, dx: 0, dy: 0, cov: new Float32Array(GW * GH).fill(1.2) };
     P.full = renderPicked(1, k);
@@ -207,7 +213,10 @@
     Sfx.play('paper');
     if (k !== P.expect) { gameOver(); return; }
     P.expect++;
-    Sfx.play('good'); toast(mean >= 0.97 ? '正解！ ムラなく摺れた' : '正解！', 'good');
+    G.combo++;
+    const bonus = Math.round(P.pickBonus * (1 + Math.min(G.combo - 1, 10) * 0.1));
+    G.total += bonus; P.bonusSum = (P.bonusSum || 0) + bonus; stageBar();
+    Sfx.play('good'); toast(`正解！ ${bonus > 0 ? `早さボーナス +${bonus}` : ''}${G.combo > 1 ? `　${G.combo}連続！` : ''}`, 'good');
     if (P.picked.length >= st.blocks.length) { stageClear(); return; }
     P.phase = 'pick'; P.view = 0; panelPick();
   }
@@ -223,7 +232,7 @@
     const last = G.idx + 1 >= STAGES.length;
     panel.innerHTML = `<div class="role"><span class="role-seal">完</span>第${G.idx + 1}図 クリア</div>
       <h2>${G.design.title}<span class="yomi">${G.design.artist}</span></h2>
-      <p class="howto">摺り上がり！ <b>${score}点</b>　${last ? '' : 'まもなく次の浮世絵へ…'}</p>
+      <p class="howto">摺り上がり！ <b>${score}点</b>${P.bonusSum ? `＋早さボーナス <b>${P.bonusSum}点</b>` : ''}　${last ? '' : 'まもなく次の浮世絵へ…'}</p>
       <div class="controls"><button class="btn primary big" id="b-next">${last ? '結果を見る' : '次の浮世絵へ'}</button></div>
       <p class="note desc">${G.design.credit}</p>`;
     $('#b-next').onclick = nextStage;
@@ -235,8 +244,9 @@
     if (G.idx + 1 >= STAGES.length) ending(); else startStage(G.idx + 1);
   }
   function gameOver() {
-    P.phase = 'over'; clearTimeout(P.timer);
+    P.phase = 'over'; clearTimeout(P.timer); G.combo = 0; stageBar();
     fx('GAME OVER', '版の順番がちがう！', false, '#ff8a6a', true);
+    if (G.total > +(pref(HIKEY) || 0)) pref(HIKEY, String(G.total));
     Sfx.play('bad');
     const th = thumbs(G.design, G.st);
     panel.innerHTML = `<div class="role"><span class="role-seal">終</span>${G.design.title}</div>
@@ -249,13 +259,15 @@
   }
   function ending() {
     P.phase = 'end'; pref(PREF, '0');
+    const best = +(pref(HIKEY) || 0), isBest = G.total > best;
+    if (isBest) pref(HIKEY, String(G.total));
     fx('免許皆伝', `全${STAGES.length}図 摺り上がり　総得点 ${G.total}点`, true, '#ffd75a', true);
     panel.innerHTML = `<div class="role"><span class="role-seal">極</span>全図クリア</div>
       <h2>全${STAGES.length}図 摺り上がり</h2>
-      <p class="howto">総得点 <b>${G.total}</b> 点。見事な摺師の腕前です。</p>
+      <p class="howto">総得点 <b>${G.total}</b> 点。${isBest ? '<b>ハイスコア更新！</b>' : `ハイスコアは ${best} 点。`}</p>
       <div class="controls"><button class="btn primary big" id="b-again">最初から遊ぶ</button></div>
       <div class="controls"><button class="btn" id="b-gal">画廊を見る</button><button class="btn" id="b-title">タイトルへ</button></div>`;
-    $('#b-again').onclick = () => { G.total = 0; startStage(0); };
+    $('#b-again').onclick = () => { G.total = 0; G.combo = 0; startStage(0); };
     $('#b-gal').onclick = showGallery;
     $('#b-title').onclick = toTitle;
   }
@@ -284,7 +296,16 @@
     if (P.phase === 'pick') {                                       // 完成図は最初だけ。選ぶ間は摺りかけの紙を見せる
       g.save(); g.shadowColor = 'rgba(0,0,0,0.35)'; g.shadowBlur = 12; g.shadowOffsetY = 4;
       g.drawImage(P.base, PAPER.x, PAPER.y, PAPER.w, PAPER.h); g.restore();
-      const label = P.picked.length ? `いまの摺り（${P.picked.length}版）` : 'まだ何も摺っていない紙';
+      const k = P.preview;
+      if (k != null) {                                              // この版を摺るとどうなるか、うっすら映す
+        const b = G.st.blocks[k];
+        if (!P.layers[k]) P.layers[k] = R.blockContent(G.design, G.st, b, 1);
+        g.save(); g.globalAlpha = 0.45 + 0.25 * Math.sin(performance.now() / 260);
+        g.drawImage(P.layers[k], 0, 0, W, H); g.restore();
+      }
+      const left = pickLeft(), f = $('#pk-time'), bt = $('#pk-bonus');
+      if (f) { f.style.width = left / PICK_SEC * 100 + '%'; f.classList.toggle('low', left < 5); bt.textContent = left > 0 ? `早さボーナス +${Math.round(50 * left / PICK_SEC)}` : '時間切れ（ボーナスなし）'; }
+      const label = P.picked.length ? `いまの摺り（${P.picked.length}版）＋この版` : 'まっさらな紙＋この版';
       g.save(); g.font = `700 14px ${R.FONT}`; const tw = g.measureText(label).width + 20;
       g.fillStyle = 'rgba(36,32,29,0.85)'; g.fillRect(PAPER.x, PAPER.y, tw, 24);
       g.fillStyle = '#fff'; g.textBaseline = 'middle'; g.textAlign = 'left'; g.fillText(label, PAPER.x + 10, PAPER.y + 12); g.restore();
@@ -424,10 +445,11 @@
     const saved = +(pref(PREF) || 0), cont = $('#btn-continue');
     cont.hidden = !(saved > 0 && saved < STAGES.length);
     cont.textContent = `つづきから（第${saved + 1}図）`;
+    const best = +(pref(HIKEY) || 0), hb = $('#hiscore'); if (hb) hb.textContent = best ? `ハイスコア ${best}点` : '';
     show('screen-title');
   }
-  $('#btn-start').onclick = () => { Sfx.init(); G.total = 0; startStage(0); };
-  $('#btn-continue').onclick = () => { Sfx.init(); G.total = 0; startStage(+(pref(PREF) || 0)); };
+  $('#btn-start').onclick = () => { Sfx.init(); G.total = 0; G.combo = 0; startStage(0); };
+  $('#btn-continue').onclick = () => { Sfx.init(); G.total = 0; G.combo = 0; startStage(+(pref(PREF) || 0)); };
   $('#btn-home').onclick = () => { if (G.playing && ['pick', 'rub'].includes(P.phase) && !confirm('タイトルに戻りますか？')) return; toTitle(); };
   $('#btn-gallery').onclick = () => { if (G.playing && ['pick', 'rub'].includes(P.phase) && !confirm('中断して画廊へ移動しますか？')) return; showGallery(); };
   $('#btn-gallery-back').onclick = toTitle;
