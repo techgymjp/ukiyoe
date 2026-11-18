@@ -109,16 +109,17 @@
   function thumbs(d, st) {
     if (d._thumbs) return d._thumbs;
     d._thumbs = st.blocks.map(b => {
-      const c = U.canvas(W * 0.3, H * 0.3), g = c.getContext('2d');
+      const c = U.canvas(W * 0.8, H * 0.8), g = c.getContext('2d');
       g.fillStyle = '#9c7a57'; g.fillRect(0, 0, c.width, c.height);
-      g.drawImage(R.blockContent(d, st, b, 0.3), 0, 0, c.width, c.height);
+      g.drawImage(R.blockContent(d, st, b, 0.8), 0, 0, c.width, c.height);
       return c.toDataURL('image/jpeg', 0.85);
     });
     return d._thumbs;
   }
 
   async function startStage(i) {
-    clearTimeout(P.timer); FX.t0 = -1e9;
+    setPicking(false);
+    clearTimeout(P.timer); FX.t0 = -1e9; FX.stay = false;
     G.idx = i; pref(PREF, String(i));
     const d = STAGES[i];
     show('screen-work'); G.playing = false;
@@ -131,10 +132,10 @@
     }
     G.design = d; setDims(d);
     G.st = newState(d);
-    Object.assign(P, { phase: 'intro', expect: 0, picked: [], rubs: [], hover: null, finalCv: null, current: -1 });
+    Object.assign(P, { phase: 'intro', expect: 0, picked: [], rubs: [], hover: null, finalCv: null, current: -1, view: 0 });
     P.order = G.st.blocks.map((_, k) => k).sort(() => Math.random() - 0.5);
     if (P.order[0] === 0) P.order.push(P.order.shift());   // 主版がいつも左端にならないように
-    P.goal = R.render(d, idealState(d), { S: 0.6 });
+    P.goal = R.render(d, idealState(d), { S: 1.5 });
     P.base = renderPicked(1);
     stageBar(); G.playing = true;
     Sfx.play('paper');
@@ -150,16 +151,33 @@
     if (P.phase !== 'intro') return;
     P.phase = 'pick'; panelPick();
   }
+  function setPicking(on) { if (document.body.classList.contains('picking') !== on) { document.body.classList.toggle('picking', on); requestAnimationFrame(resize); } }
+  function candidates() { return P.order.filter(k => !P.picked.includes(k)); }
   function panelPick() {
-    const st = G.st, th = thumbs(G.design, st), n = st.blocks.length;
-    panel.innerHTML = `<div class="role"><span class="role-seal">摺</span>${G.design.title}</div>
-      <p class="howto">第<b>${P.picked.length + 1}</b>版 / 全${n}版：<b>次に摺る版</b>を選ぼう。<br><small>主版（墨の線）が最初。色は薄い色→濃い色の順。</small></p>
-      <div class="blocks">${P.order.map((k, pos) => P.picked.includes(k) ? '' : `<button class="blockcard" data-k="${k}"><img src="${th[k]}" alt=""><span>${KANA[pos]}の版</span></button>`).join('')}</div>`;
-    panel.querySelectorAll('.blockcard').forEach(c => c.onclick = () => pickBlock(+c.dataset.k));
+    const st = G.st, th = thumbs(G.design, st), n = st.blocks.length, cs = candidates();
+    setPicking(true);
+    P.view = U.clamp(P.view || 0, 0, cs.length - 1);
+    const k = cs[P.view];
+    panel.innerHTML = `<p class="howto">第<b>${P.picked.length + 1}</b>版 / 全${n}版：<b>次に摺る版</b>はどれ？<br><small>主版（墨の線）が最初。色は薄い色→濃い色の順。</small></p>
+      <div class="cand">
+        <button class="cand-nav" id="b-prev" aria-label="前の版" ${cs.length < 2 ? 'disabled' : ''}>◀</button>
+        <div class="cand-card" id="cand"><img src="${th[k]}" alt="版木"><span>${KANA[P.order.indexOf(k)]}の版　${P.view + 1} / ${cs.length}</span></div>
+        <button class="cand-nav" id="b-next2" aria-label="次の版" ${cs.length < 2 ? 'disabled' : ''}>▶</button>
+      </div>
+      <div class="cand-dots">${cs.map((_, i) => `<i class="${i === P.view ? 'on' : ''}"></i>`).join('')}</div>
+      <div class="controls"><button class="btn primary big" id="b-pick">この版を摺る</button></div>`;
+    const flip = dir => { if (cs.length < 2) return; P.view = (P.view + dir + cs.length) % cs.length; Sfx.play('paper'); panelPick(); };
+    $('#b-prev').onclick = () => flip(-1);
+    $('#b-next2').onclick = () => flip(1);
+    $('#b-pick').onclick = () => pickBlock(cs[P.view]);
+    const card = $('#cand'); let sx = null;
+    card.addEventListener('pointerdown', e => { sx = e.clientX; });
+    card.addEventListener('pointerup', e => { if (sx == null) return; const dx = e.clientX - sx; sx = null; if (Math.abs(dx) > 30) flip(dx < 0 ? 1 : -1); });
+    P.flip = flip;
   }
   function pickBlock(k) {
     if (P.phase !== 'pick' || P.picked.includes(k)) return;
-    Sfx.play('tap');
+    Sfx.play('tap'); setPicking(false);
     G.st.results[k] = { amount: 0.5, dx: 0, dy: 0, cov: new Float32Array(GW * GH).fill(1.2) };
     P.full = renderPicked(1, k);
     P.current = k;
@@ -183,7 +201,7 @@
     P.expect++;
     Sfx.play('good'); toast(mean >= 0.97 ? '正解！ ムラなく摺れた' : '正解！', 'good');
     if (P.picked.length >= st.blocks.length) { stageClear(); return; }
-    P.phase = 'pick'; panelPick();
+    P.phase = 'pick'; P.view = 0; panelPick();
   }
   function stageClear() {
     P.phase = 'clear';
@@ -255,6 +273,17 @@
   function drawPlay(g) {
     bgWood(g);
     if (P.phase === 'intro') { drawGoal(g, true); return; }
+    if (P.phase === 'pick') {
+      drawGoal(g, true);
+      if (P.picked.length) {
+        const iw = W * 0.34, ih = iw * P.base.height / P.base.width, ix = W - iw - 2, iy = H - ih - 2;
+        g.save(); g.shadowColor = 'rgba(0,0,0,0.5)'; g.shadowBlur = 10; g.drawImage(P.base, ix, iy, iw, ih); g.restore();
+        g.strokeStyle = '#2b2622'; g.lineWidth = 2; g.strokeRect(ix, iy, iw, ih);
+        g.fillStyle = 'rgba(36,32,29,0.85)'; g.fillRect(ix, iy - 18, 92, 18);
+        g.fillStyle = '#fff'; g.font = `700 12px ${R.FONT}`; g.textBaseline = 'middle'; g.textAlign = 'left'; g.fillText(`いまの摺り（${P.picked.length}版）`, ix + 6, iy - 9);
+      }
+      return;
+    }
     g.save(); g.shadowColor = 'rgba(0,0,0,0.35)'; g.shadowBlur = 12; g.shadowOffsetY = 4;
     g.drawImage(P.phase === 'clear' && P.finalCv ? P.finalCv : P.base, PAPER.x, PAPER.y, PAPER.w, PAPER.h); g.restore();
     if (P.phase === 'rub') {
@@ -284,12 +313,6 @@
       }
       const m = covMean(), f = $('#sr-fill'), t = $('#sr-txt');
       if (f) { f.style.width = Math.min(100, m * 100) + '%'; t.textContent = `摺れ具合 ${Math.round(m * 100)}%`; }
-    }
-    if (P.phase === 'pick') {
-      drawGoal(g, false);
-      g.save(); g.fillStyle = 'rgba(36,32,29,0.82)'; g.fillRect(W / 2 - 130, H / 2 - 20, 260, 40);
-      g.fillStyle = '#fff'; g.font = `700 17px ${R.FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle';
-      g.fillText(`第${P.picked.length + 1}版はどれ？`, W / 2, H / 2); g.restore();
     }
   }
 
@@ -337,6 +360,12 @@
   cv.addEventListener('pointercancel', endP);
   cv.addEventListener('pointerleave', () => { P.hover = null; });
   cv.addEventListener('contextmenu', e => e.preventDefault());
+  document.addEventListener('keydown', e => {
+    if (P.phase !== 'pick' || !G.playing) return;
+    if (e.code === 'ArrowLeft') P.flip && P.flip(-1);
+    if (e.code === 'ArrowRight') P.flip && P.flip(1);
+    if (e.code === 'Enter') pickBlock(candidates()[P.view]);
+  });
 
   function loop() {
     requestAnimationFrame(loop);
@@ -385,7 +414,7 @@
 
   /* ───────── タイトル ───────── */
   function toTitle() {
-    clearTimeout(P.timer); FX.t0 = -1e9; G.playing = false; G.design = null; stageBar();
+    clearTimeout(P.timer); FX.t0 = -1e9; FX.stay = false; G.playing = false; G.design = null; stageBar();
     const saved = +(pref(PREF) || 0), cont = $('#btn-continue');
     cont.hidden = !(saved > 0 && saved < STAGES.length);
     cont.textContent = `つづきから（第${saved + 1}図）`;
