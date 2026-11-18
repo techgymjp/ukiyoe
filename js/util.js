@@ -208,5 +208,41 @@ const Sfx = {
     clearInterval(this.bgmTimer); this.bgmTimer = null;
     if (this.ctx) this.bgmBus.gain.setTargetAtTime(0, this.ctx.currentTime, 0.4);
   },
+  /* ばれんで摺る音：こすっている間鳴り続け、速さで音量と音色が変わる */
+  rubLoop: null,
+  rubStart() {
+    if (!this.on) return;
+    this.init();
+    const c = this.ctx; if (!c || this.rubLoop) return;
+    const src = c.createBufferSource(); src.buffer = this.noise; src.loop = true;
+    const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1400; bp.Q.value = 0.7;
+    const lo = c.createBiquadFilter(); lo.type = 'lowpass'; lo.frequency.value = 5000;
+    const g = c.createGain(); g.gain.value = 0;
+    // 紙の繊維がこすれる「ざらつき」：音量を細かく揺らす
+    const trem = c.createOscillator(), tg = c.createGain(); trem.type = 'sawtooth'; trem.frequency.value = 22; tg.gain.value = 0;
+    trem.connect(tg).connect(g.gain);
+    src.connect(bp).connect(lo).connect(g).connect(this.sfxBus);
+    src.start(); trem.start();
+    this.rubLoop = { src, bp, g, trem, tg };
+  },
+  rubSpeed(v) {
+    const r = this.rubLoop; if (!r) return;
+    const t = this.ctx.currentTime, k = Math.min(1, v / 1.3);
+    const level = 0.08 + 0.42 * k;
+    r.g.gain.cancelScheduledValues(t);
+    r.g.gain.setTargetAtTime(level, t, 0.02);
+    r.g.gain.setTargetAtTime(0, t + 0.09, 0.06);          // 手を止めると消える
+    r.tg.gain.setTargetAtTime(level * 0.35, t, 0.03);
+    r.trem.frequency.setTargetAtTime(14 + 30 * k, t, 0.05);
+    r.bp.frequency.setTargetAtTime(1000 + 1800 * k, t, 0.05);
+  },
+  rubStop() {
+    const r = this.rubLoop; if (!r) return;
+    const t = this.ctx.currentTime;
+    r.g.gain.cancelScheduledValues(t); r.g.gain.setTargetAtTime(0, t, 0.05);
+    r.tg.gain.setTargetAtTime(0, t, 0.05);
+    r.src.stop(t + 0.4); r.trem.stop(t + 0.4);
+    this.rubLoop = null;
+  },
   setBgm(on) { this.bgmOn = on; if (on) { this.init(); this.bgmStart(); } else this.bgmStop(); },
 };

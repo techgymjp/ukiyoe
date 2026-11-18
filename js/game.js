@@ -105,16 +105,24 @@
     st.results = saved;
     return c;
   }
+  /* 版木カード：彫り下げた所は暗く、浮き出た版の形は明るい木の縁と影で立体的に */
   function thumbs(d, st) {
     if (d._thumbs) return d._thumbs;
     d._thumbs = st.blocks.map(b => {
-      const c = U.canvas(W * 0.8, H * 0.8), g = c.getContext('2d');
-      g.fillStyle = '#9c7a57'; g.fillRect(0, 0, c.width, c.height);
-      g.drawImage(R.blockContent(d, st, b, 0.8), 0, 0, c.width, c.height);
-      return c.toDataURL('image/jpeg', 0.85);
+      const c = U.canvas(W * 0.8, H * 0.8), g = c.getContext('2d'), cw = c.width, ch = c.height;
+      g.fillStyle = '#2e1d10'; g.fillRect(0, 0, cw, ch);
+      g.globalAlpha = 0.25; g.drawImage(texWood, 0, 0, cw, ch); g.globalAlpha = 1;
+      const label = b.kind === 'key' ? d.raster.keyLabel : b.region.label;
+      g.drawImage(R.silhouette(d, label, '#0d0703'), 2.5, 3, cw, ch);                 // 影
+      const rim = R.silhouette(d, label, '#f3dfb8');                                    // 明るい木の縁
+      [[-1.6, 0], [1.6, 0], [0, -1.6], [0, 1.6], [-1.1, -1.1], [1.1, 1.1], [1.1, -1.1], [-1.1, 1.1]].forEach(([x, y]) => g.drawImage(rim, x, y, cw, ch));
+      g.drawImage(R.plate(d, label), 0, 0, cw, ch);                                      // 版の色
+      g.strokeStyle = '#5a381f'; g.lineWidth = 4; g.strokeRect(2, 2, cw - 4, ch - 4);
+      return c.toDataURL('image/jpeg', 0.88);
     });
     return d._thumbs;
   }
+
 
   async function startStage(i) {
     setPicking(false);
@@ -191,6 +199,7 @@
   }
   function finishRub() {
     if (P.phase !== 'rub') return;
+    Sfx.rubStop();
     const st = G.st, k = P.current, mean = covMean();
     st.results[k].cov = P.cov;
     P.picked.push(k); P.rubs.push(mean);
@@ -323,6 +332,7 @@
   let pDown = false;
   function rubTo(p) {
     const L = U.dist(p, P.last), n = Math.max(1, Math.ceil(L / 4)), step = L / n;
+    if (L > 0.5) Sfx.rubSpeed(L / Math.max(1, p.t - P.last.t));
     for (let k = 1; k <= n; k++) {
       const x = U.lerp(P.last.x, p.x, k / n), y = U.lerp(P.last.y, p.y, k / n);
       const gx0 = Math.max(0, Math.floor((x - RUB_R) / CELL)), gx1 = Math.min(GW - 1, Math.floor((x + RUB_R) / CELL));
@@ -333,7 +343,6 @@
       }
     }
     P.last = p; P.dirty = true;
-    if (L > 2) Sfx.play('rub', 110);
     if (covMean() >= 0.985) finishRub();
   }
   cv.addEventListener('pointerdown', e => {
@@ -342,7 +351,7 @@
     pDown = true;
     const p = pt(e);
     if (P.phase === 'intro') toPick();
-    else if (P.phase === 'rub') { P.last = p; P.started = true; P.hover = p; }
+    else if (P.phase === 'rub') { P.last = p; P.started = true; P.hover = p; Sfx.rubStart(); }
   });
   cv.addEventListener('pointermove', e => {
     const evs = (e.getCoalescedEvents && e.getCoalescedEvents().length) ? e.getCoalescedEvents() : [e];
@@ -352,7 +361,7 @@
     }
   });
   const endP = () => {
-    if (!pDown) return; pDown = false; P.last = null;
+    if (!pDown) return; pDown = false; P.last = null; Sfx.rubStop();
     if (P.phase === 'rub' && P.started && covMean() >= 0.93) finishRub();
   };
   cv.addEventListener('pointerup', endP);
