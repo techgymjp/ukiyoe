@@ -219,3 +219,5 @@ body.loading #design-list-orig, body.loading #design-list { opacity: .5; pointer
   .now { margin: 4px 0; font-size: 14px; }
   .meter { margin: 6px 0; height: 24px; }
 }
+
+.lead.small { font-size: 14px; margin: 14px 0 0; }
