@@ -244,5 +244,8 @@ const Sfx = {
     r.src.stop(t + 0.4); r.trem.stop(t + 0.4);
     this.rubLoop = null;
   },
+  /* 広告の表示中やアプリが裏に回った時に音を止める */
+  suspend() { if (this.ctx && this.ctx.state === 'running') this.ctx.suspend(); },
+  resume() { if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume(); },
   setBgm(on) { this.bgmOn = on; if (on) { this.init(); this.bgmStart(); } else this.bgmStop(); },
 };

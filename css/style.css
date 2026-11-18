@@ -283,3 +283,18 @@ a.brand { text-decoration: none; }
 .ptime span { position: relative; display: block; text-align: center; font-size: 12px; line-height: 22px; font-weight: 700; }
 .stagebar em { font-style: normal; color: #fff; background: var(--shu); padding: 0 8px; border-radius: 10px; font-size: 13px; }
 .hiscore { text-align: center; font-weight: 700; color: var(--shu-d); margin: 0 0 10px; min-height: 1em; }
+
+/* Android アプリ：バナー広告の余白・一時停止・タイトルの表記 */
+#screen-title, #screen-howto, #screen-gallery { padding-bottom: calc(16px + var(--banner-h, 0px)); }
+body.result #screen-work.active { padding-bottom: calc(8px + var(--banner-h, 0px)); }
+.legal { display: block; margin-top: 8px; }
+.legal a { color: inherit; }
+.pausebtn { position: absolute; top: 6px; left: 6px; width: 40px; height: 40px; border-radius: 50%; border: 0; background: rgba(36,32,29,.75); color: #fff; font-size: 14px; cursor: pointer; display: none; }
+body.playing .pausebtn { display: block; }
+.overlay { position: fixed; inset: 0; z-index: 60; background: rgba(20,16,12,.75); display: grid; place-items: center; padding: 16px 16px calc(16px + var(--banner-h, 0px)); }
+.overlay[hidden] { display: none; }
+.overlay-box { background: var(--paper); border-radius: 10px; padding: 20px 22px; width: min(340px, 100%); text-align: center; }
+.overlay-box h2 { margin: 0 0 10px; letter-spacing: .2em; }
+.howto-back { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.retry-offer { margin: 10px 0; padding: 10px; border: 2px solid #e0a52a; border-radius: 8px; background: #fff7e0; text-align: center; animation: pulse 1s ease-in-out infinite; }
+.retry-offer small { display: block; color: var(--ink2); margin-top: 4px; }

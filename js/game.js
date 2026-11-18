@@ -10,9 +10,15 @@
   const cv = $('#cv'), ctx = cv.getContext('2d'), panel = $('#panel');
   const PAPER = { x: -M, y: -M, w: 400 + 2 * M, h: 600 + 2 * M };
   let scale = 1, dpr = 1, texWood = null;
-  const G = { idx: 0, design: null, st: null, total: 0, combo: 0, playing: false };
+  const G = { idx: 0, design: null, st: null, total: 0, combo: 0, retries: 0, playing: false };
+  // Android アプリ（Capacitor）で動いているか。Web 版では Capacitor がないので何もしない
+  const NATIVE = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+  const plugin = name => (NATIVE && window.Capacitor.Plugins ? window.Capacitor.Plugins[name] : null);
+  const MAX_RETRIES = 5;   // 広告を見て版をやり直せる回数（1ゲーム）
+  // 全画面広告を出してから次へ進む（プレイ開始・タイトルへ戻る・再開・次の図へ のたびに毎回）
+  const withAd = fn => () => Ads.showInterstitial().then(fn);
   const PICK_SEC = 15, HIKEY = 'ukiyoe-shokunin-best';
-  window.UKIYOE = G;
+  window.UKIYOE = G; // @web-only
   const STAGES = MEISAKU;
 
   /* ───────── 共通 ───────── */
@@ -30,6 +36,7 @@
   }
   window.addEventListener('resize', resize);
   function show(id) {
+    if (id !== 'screen-work') { const pz = document.getElementById('pause'); if (pz) pz.hidden = true; }
     document.querySelectorAll('.screen').forEach(e => e.classList.toggle('active', e.id === id));
     document.body.dataset.screen = id;
     if (id === 'screen-work') requestAnimationFrame(resize);
@@ -245,11 +252,14 @@
       <p class="note desc">${G.design.credit}</p>`;
     $('#b-next').onclick = nextStage;
     P.timer = setTimeout(nextStage, 4200);
+    if (G.retries) $('#b-next').insertAdjacentHTML('afterend', `<p class="note">やり直し ${G.retries}回</p>`);
   }
   function nextStage() {
     clearTimeout(P.timer);
-    if (P.phase !== 'clear') return;
-    if (G.idx + 1 >= STAGES.length) ending(); else startStage(G.idx + 1);
+    if (P.phase !== 'clear' || P.leaving) return;
+    if (G.idx + 1 >= STAGES.length) { ending(); return; }
+    P.leaving = true;
+    Ads.showInterstitial().then(() => { P.leaving = false; startStage(G.idx + 1); });
   }
   function gameOver() {
     P.phase = 'over'; clearTimeout(P.timer); G.combo = 0; stageBar();
@@ -261,9 +271,48 @@
       <p class="howto">版の順番がちがいました。正しい順番は：</p>
       <div class="blocks answer">${G.st.blocks.map((b, k) => `<div class="blockcard"><img src="${th[k]}" alt=""><span>${k + 1}番目</span></div>`).join('')}</div>
       <div class="controls"><button class="btn primary big" id="b-retry">この図からやり直す</button></div>
-      <div class="controls"><button class="btn" id="b-title">タイトルへ</button></div>`;
-    $('#b-retry').onclick = () => startStage(G.idx);
-    $('#b-title').onclick = toTitle;
+      <div class="controls"><button class="btn" id="b-share">シェア</button><button class="btn" id="b-title">タイトルへ</button></div>`;
+    $('#b-retry').onclick = withAd(() => startStage(G.idx));
+    $('#b-title').onclick = withAd(toTitle);
+    $('#b-share').onclick = () => share(`浮世絵職人で第${G.idx + 1}図「${G.design.title}」まで挑戦！ 得点 ${G.total}点`);
+    offerRetry();
+  }
+  /* リワード広告：順番をまちがえた版を摺る前に戻ってやり直す（1ゲーム5回まで）。
+     失敗した摺り上がりを見届けられるよう少し待ってから案内し、数秒で自動的に消す */
+  function offerRetry() {
+    if (!Ads.rewardAvailable || G.retries >= MAX_RETRIES) return;
+    const myPhase = P.timer = setTimeout(() => {
+      if (P.phase !== 'over') return;
+      const box = document.createElement('div');
+      box.className = 'retry-offer';
+      box.innerHTML = `<button class="btn primary big" id="b-reward">広告を見て、この版の前からやり直す</button><small>残り ${MAX_RETRIES - G.retries} 回</small>`;
+      panel.prepend(box);
+      $('#b-reward').onclick = async () => {
+        box.remove();
+        const r = await Ads.showRewarded();
+        if (r === 'rewarded' && P.phase === 'over') undoWrong();
+      };
+      P.offerTimer = setTimeout(() => box.remove(), 7000);
+    }, 2500);
+  }
+  function undoWrong() {
+    clearTimeout(P.timer); clearTimeout(P.offerTimer);
+    const k = P.picked.pop(); P.rubs.pop();
+    G.st.results[k] = undefined;
+    P.base = renderPicked(1);
+    FX.t0 = -1e9; FX.stay = false;
+    G.retries++;
+    P.phase = 'pick'; P.view = 0; P.pickFor = -1;
+    toast(`やり直し（${G.retries}回目）`, 'good');
+    panelPick();
+  }
+  /* シェア：アプリでは Android の共有メニュー、Web では共有 API か X（旧 Twitter） */
+  async function share(text) {
+    const url = NATIVE ? 'https://play.google.com/store/apps/details?id=jp.techgym.ukiyoe' : location.href.split('#')[0];
+    const nativeShare = plugin('Share');
+    if (nativeShare) { try { await nativeShare.share({ title: '浮世絵職人', text, url, dialogTitle: 'シェア' }); } catch (e) { /* キャンセル */ } }
+    else if (navigator.share) { try { await navigator.share({ title: '浮世絵職人', text, url }); } catch (e) { /* キャンセル */ } }
+    else window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`, '_blank');
   }
   function ending() {
     P.phase = 'end'; pref(PREF, '0');
@@ -274,10 +323,12 @@
       <h2>全${STAGES.length}図 摺り上がり</h2>
       <p class="howto">総得点 <b>${G.total}</b> 点。${isBest ? '<b>ハイスコア更新！</b>' : `ハイスコアは ${best} 点。`}</p>
       <div class="controls"><button class="btn primary big" id="b-again">最初から遊ぶ</button></div>
-      <div class="controls"><button class="btn" id="b-gal">画廊を見る</button><button class="btn" id="b-title">タイトルへ</button></div>`;
-    $('#b-again').onclick = () => { G.total = 0; G.combo = 0; startStage(0); };
+      ${G.retries ? `<p class="note">やり直し ${G.retries}回</p>` : ''}
+      <div class="controls"><button class="btn" id="b-share">シェア</button><button class="btn" id="b-gal">画廊を見る</button><button class="btn" id="b-title">タイトルへ</button></div>`;
+    $('#b-again').onclick = withAd(() => newGame(0));
     $('#b-gal').onclick = showGallery;
-    $('#b-title').onclick = toTitle;
+    $('#b-title').onclick = withAd(toTitle);
+    $('#b-share').onclick = () => share(`浮世絵職人で全${STAGES.length}図を摺り上げた！ 総得点 ${G.total}点${G.retries ? `（やり直し ${G.retries}回）` : ''}`);
   }
 
   /* ───────── 描画 ───────── */
@@ -404,6 +455,7 @@
 
   function loop() {
     requestAnimationFrame(loop);
+    syncUi();
     if (!G.playing || document.body.dataset.screen !== 'screen-work') return;
     ctx.setTransform(scale * dpr, 0, 0, scale * dpr, 0, 0);
     ctx.clearRect(0, 0, VW, VH);
@@ -456,11 +508,65 @@
     const best = +(pref(HIKEY) || 0), hb = $('#hiscore'); if (hb) hb.textContent = best ? `ハイスコア ${best}点` : '';
     show('screen-title');
   }
-  $('#btn-start').onclick = () => { Sfx.init(); G.total = 0; G.combo = 0; startStage(0); };
-  $('#btn-continue').onclick = () => { Sfx.init(); G.total = 0; G.combo = 0; startStage(+(pref(PREF) || 0)); };
-  $('#btn-home').onclick = () => { if (G.playing && ['pick', 'rub'].includes(P.phase) && !confirm('タイトルに戻りますか？')) return; toTitle(); };
-  $('#btn-gallery').onclick = () => { if (G.playing && ['pick', 'rub'].includes(P.phase) && !confirm('中断して画廊へ移動しますか？')) return; showGallery(); };
+  const newGame = i => { Sfx.init(); G.total = 0; G.combo = 0; G.retries = 0; startStage(i); };
+  $('#btn-start').onclick = withAd(() => newGame(0));
+  $('#btn-continue').onclick = withAd(() => newGame(+(pref(PREF) || 0)));
+  $('#btn-howto').onclick = () => { Sfx.play('tap'); show('screen-howto'); window.scrollTo(0, 0); };
+  $('#btn-howto-start').onclick = withAd(() => newGame(+(pref(PREF) || 0) < STAGES.length ? +(pref(PREF) || 0) : 0));
+  $('#btn-howto-back').onclick = withAd(toTitle);
+  $('#btn-home').onclick = () => { if (G.playing && ['intro', 'pick', 'rub'].includes(P.phase)) { setPaused(true); return; } Ads.showInterstitial().then(toTitle); };
+  $('#btn-gallery').onclick = () => { if (G.playing && ['intro', 'pick', 'rub'].includes(P.phase)) { setPaused(true); return; } showGallery(); };
   $('#btn-gallery-back').onclick = toTitle;
+
+  /* ───────── 一時停止・戻るボタン・広告の出る画面 ───────── */
+  let pausedAt = 0;
+  const inPlay = () => G.playing && document.body.dataset.screen === 'screen-work' && ['intro', 'pick', 'rub'].includes(P.phase);
+  function setPaused(on) {
+    const box = $('#pause');
+    if (on === !box.hidden) return;
+    if (on) {
+      if (!inPlay()) return;
+      box.hidden = false; pausedAt = performance.now(); pDown = false; Sfx.rubStop();
+      if (P.phase === 'intro') clearTimeout(P.timer);
+    } else {
+      box.hidden = true;
+      if (P.phase === 'pick') P.pickT0 += performance.now() - pausedAt;   // 止めていた間は時間ゲージを進めない
+      if (P.phase === 'intro') P.timer = setTimeout(toPick, 3000);
+    }
+    syncUi();
+  }
+  $('#btn-pause').onclick = () => setPaused(true);
+  $('#btn-resume').onclick = withAd(() => setPaused(false));
+  $('#btn-pause-title').onclick = withAd(() => { $('#pause').hidden = true; toTitle(); });
+  // アプリが裏に回ったら一時停止して音を止める
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) { setPaused(true); Sfx.suspend(); }
+    else Sfx.resume();
+  });
+  // Android の戻るボタン：プレイ中は一時停止、一時停止中は再開、遊び方・画廊はタイトルへ、タイトル・結果画面ではアプリを閉じる
+  if (plugin('App')) {
+    plugin('App').addListener('backButton', () => {
+      const scr = document.body.dataset.screen;
+      if (!$('#pause').hidden) withAd(() => setPaused(false))();
+      else if (inPlay()) setPaused(true);
+      else if (scr === 'screen-howto') withAd(toTitle)();
+      else if (scr === 'screen-gallery') toTitle();
+      else if ($('#viewer').classList.contains('open')) $('#viewer').classList.remove('open');
+      else plugin('App').exitApp();
+    });
+  }
+  // バナーはタイトル・遊び方・画廊・一時停止・結果の画面だけ（プレイ中は出さない）
+  function syncUi() {
+    const play = inPlay() && $('#pause').hidden;
+    const result = document.body.dataset.screen === 'screen-work' && ['clear', 'over', 'end'].includes(P.phase);
+    document.body.classList.toggle('playing', play);
+    document.body.classList.toggle('result', result);
+    Ads.setBanner(!play);
+  }
+  // タイトル画面：ビルド番号（アプリのみ）と、EU など同意が必要な地域での「広告の設定」
+  if (window.APP_VERSION && window.APP_VERSION !== 'dev') $('#buildInfo').textContent = window.APP_VERSION;
+  Ads.initDone.then(() => { if (Ads.privacyOptionsRequired) $('#adPrivacy').hidden = false; });
+  $('#adPrivacyLink').onclick = e => { e.preventDefault(); Ads.showPrivacyOptions(); };
 
   /* ───────── 音 ───────── */
   Sfx.on = pref('ukiyoe-sfx') !== '0'; Sfx.bgmOn = pref('ukiyoe-bgm') !== '0';
@@ -476,5 +582,5 @@
   requestAnimationFrame(loop);
 
   /* 自動テスト用 */
-  G._debug = { P, startStage, pickBlock, finishRub, STAGES };
+  G._debug = { P, startStage, pickBlock, finishRub, STAGES, setPaused, undoWrong }; // @web-only
 })();

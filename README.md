@@ -41,11 +41,40 @@
 
 ## 実行
 
-ビルド不要の静的サイトです。版を作るために画像を解析するので、Webサーバー経由で開いてください（GitHub Pages ならそのまま動きます）。
+Web 版はビルド不要の静的サイトです。版を作るために画像を解析するので、Webサーバー経由で開いてください（GitHub Pages ならそのまま動きます）。
 
 ```bash
 python3 -m http.server 8000
 ```
+
+## Android アプリ
+
+[Capacitor](https://capacitorjs.com/) で Android アプリにしています（パッケージ名 `jp.techgym.ukiyoe`）。ゲームのファイルはアプリに同梱しているので、オフラインでも遊べます。
+
+- 動作確認用 APK（デバッグ署名・テスト広告）は、既定ブランチへの push のたびに GitHub Actions が作り、Release に載せます
+  - リリース画面：https://github.com/techgymjp/ukiyoe/releases/tag/android-latest
+  - APK 直接：https://github.com/techgymjp/ukiyoe/releases/latest/download/ukiyoe.apk
+  - スマホのカメラで読み取る QR コード（リリース画面）：
+
+    ![リリース画面の QR コード](docs/apk-qr.png)
+
+- Google Play 用の署名付き AAB は、GitHub Secrets（`ANDROID_KEYSTORE_BASE64` など 4 つ）を登録すると Actions の Artifact に `ukiyoe-release-aab` として出ます
+- 広告（AdMob）：バナーはタイトル・遊び方・一時停止・結果の画面だけ。全画面広告はプレイ開始・タイトルへ戻る・再開・次の図へ のたび。リワード広告を見ると、順番をまちがえた版を摺る前に戻ってやり直せます（1 ゲーム 5 回まで）
+- ローカルでの準備：
+
+```bash
+npm ci
+```
+
+```bash
+npm run android:sync
+```
+
+## ライセンス
+
+著作権はテックジム株式会社に帰属します（All rights reserved）。許可なく複製・改変・再配布すること、Web サイトやアプリとして公開・販売すること、名前・ロゴ・アイコン・画像を使用することを禁止します。
+テックジムの受講生が学習目的で複製・改変することは許可しますが、アプリストアでの公開・広告の掲載・販売などの商用利用は禁止です。詳しくは [LICENSE](LICENSE) をご覧ください。
+浮世絵の原画はメトロポリタン美術館のパブリックドメイン（CC0）画像です。
 
 ## GitHub Pages で公開
 
@@ -89,7 +118,10 @@ js/util.js          汎用関数・効果音とBGM（WebAudio）
 js/designs.js       顔料の色
 js/meisaku.js       出題する作品の一覧（この順に出題）
 js/render.js        摺りの描画エンジン（和紙・木目・摺りムラ）
-js/game.js          ゲーム本体（版選び・摺り・判定・画廊）
+js/game.js          ゲーム本体（版選び・摺り・判定・画廊・一時停止・戻るボタン）
+js/ads.js           AdMob 広告（Android アプリのときだけ動く）
+scripts/build-web.js  www/ にまとめるビルド（--app でアプリ用）
+android/            Android プロジェクト（Capacitor）
 assets/originals/   原画（CC0）
 assets/fresh/       摺りたての色に修復した版の色
 assets/plates/      原画の色分解ラベル画像

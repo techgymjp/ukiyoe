@@ -1,0 +1,8 @@
+{
+  "appId": "jp.techgym.ukiyoe",
+  "appName": "浮世絵職人",
+  "webDir": "www",
+  "android": {
+    "backgroundColor": "#24201d"
+  }
+}

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>浮世絵職人</title>
-<meta name="description" content="絵師・彫師・摺師の工程をなぞって、一枚の錦絵（浮世絵）を摺り上げるWEBゲーム。">
+<meta name="description" content="北斎・広重・歌麿・写楽の浮世絵を、版を摺る順番を見抜いて摺り上げるパズルゲーム。">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;700;800&display=swap" rel="stylesheet">
@@ -31,13 +31,41 @@
         <button class="btn big" id="btn-continue" hidden>つづきから</button>
       </div>
       <p class="hiscore" id="hiscore"></p>
-      <p class="howto-link"><a class="btn" href="asobikata.html">遊び方</a></p>
+      <p class="howto-link"><button class="btn" id="btn-howto">遊び方</button></p>
     </div>
-    <footer class="foot">作品はすべてメトロポリタン美術館が公開するパブリックドメイン（CC0）の原画を色分解して版にしています。</footer>
+    <footer class="foot">作品はすべてメトロポリタン美術館が公開するパブリックドメイン（CC0）の原画を色分解して版にしています。
+      <span class="legal"><span id="buildInfo"></span> <a href="https://techgym.jp/privacy-policy/" target="_blank" rel="noopener">プライバシーポリシー</a><span id="adPrivacy" hidden>｜<a href="#" id="adPrivacyLink">広告の設定</a></span></span></footer>
   </section>
 
+  <section id="screen-howto" class="screen howto-main">
+  <h1>遊び方</h1>
+  <p class="lead">浮世絵は、何枚もの版木を一色ずつ紙に摺り重ねてできています。<br>お手本を見て、<b>版を摺る順番</b>を見抜き、自分の手で摺り上げましょう。</p>
+
+  <ol class="howto-steps">
+    <li><span>壱</span><div><strong>お手本を見る</strong>完成した浮世絵が表示されます。何枚の版でできているかをよく見ましょう。</div></li>
+    <li><span>弐</span><div><strong>版を選ぶ</strong>下に版木が1枚ずつ表示されます。◀ ▶ やスワイプでめくり、次に摺る版を「この版を摺る」で選びます。</div></li>
+    <li><span>参</span><div><strong>自分で摺る</strong>摺りモードになります。ばれんで紙をまんべんなくこすると、その版の色が紙に移ります。</div></li>
+    <li><span>四</span><div><strong>摺り上がり</strong>順番を間違えた版を摺り上げると<b>ゲームオーバー</b>。全部正しく摺れたら次の浮世絵へ進みます。</div></li>
+  </ol>
+
+  <h2>順番のコツ</h2>
+  <ul class="howto-tips">
+    <li>最初は<b>主版</b>（墨の細い線の版）。</li>
+    <li>そのあとの色版は<b>薄い色 → 濃い色</b>の順。</li>
+    <li>ムラなく全体をこすると「<b>PERFECT!</b>」で満点です。</li>
+    <li>版木をめくると、その版を摺った時の色が紙にうっすら映ります。いまの紙と見比べて考えましょう。</li>
+    <li>早く正解するほど<b>早さボーナス</b>（最大＋50点）。正解が続くと<b>連続ボーナス</b>も増えます。</li>
+  </ul>
+
+  <h2>登場する浮世絵</h2>
+  <p>葛飾北斎・歌川広重の風景画、喜多川歌麿・鈴木春信の美人画、東洲斎写楽の役者絵（歌舞伎）など全20図。版の少ない、やさしい順に出題されます。途中でやめても「つづきから」で再開できます。</p>
+  <p class="note">作品はすべてメトロポリタン美術館が公開するパブリックドメイン（CC0）の原画を色分解して版にしています。</p>
+
+  <div class="howto-back"><button class="btn primary big" id="btn-howto-start">はじめる</button><button class="btn big" id="btn-howto-back">タイトルへ戻る</button></div>
+</section>
+
   <section id="screen-work" class="screen">
-    <div class="stage-wrap"><canvas id="cv"></canvas><div id="toast"></div></div>
+    <div class="stage-wrap"><canvas id="cv"></canvas><div id="toast"></div><button class="pausebtn" id="btn-pause" aria-label="一時停止">❚❚</button></div>
     <aside id="panel" class="panel"></aside>
   </section>
 
@@ -47,11 +75,21 @@
   </section>
 </main>
 <div id="viewer"><img alt="作品"></div>
+<div id="pause" class="overlay" hidden>
+  <div class="overlay-box">
+    <h2>一時停止</h2>
+    <div class="controls"><button class="btn primary big" id="btn-resume">つづける</button></div>
+    <div class="controls"><button class="btn big" id="btn-pause-title">タイトルへ戻る</button></div>
+  </div>
+</div>
 
+<script src="js/ads-config.js"></script>
+<script src="js/build-info.js"></script>
 <script src="js/util.js"></script>
 <script src="js/designs.js"></script>
 <script src="js/meisaku.js"></script>
 <script src="js/render.js"></script>
+<script src="js/ads.js"></script>
 <script src="js/game.js"></script>
 </body>
 </html>
