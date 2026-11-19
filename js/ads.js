@@ -12,7 +12,7 @@ const Ads = (() => {
       },
       // 本番の広告ユニット（AdMob で作成した ID が届いたら入れる。空の種類は本番ビルドで出さない）
       production: {
-        interstitial: '',
+        interstitial: 'ca-app-pub-6411535997477460/1363375408',
         rewarded: '',
         banner: 'ca-app-pub-6411535997477460/7119419915',
       },
