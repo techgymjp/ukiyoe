@@ -132,18 +132,23 @@
     return (G.design.orders || []).some(o => seq.every((l, n) => o[n] === l));
   }
   const nextValid = () => G.st.blocks.findIndex((_, k) => canPrint(k));
-  /* 版木カード：彫り下げた所は暗く、浮き出た版の形は明るい木の縁と影で立体的に */
+  /* 版木カード：彫り下げた所は木の地のまま、浮き出た版の面にはその版で摺る色（色板は色、主版は墨）を塗って見せる */
   function thumbs(d, st) {
     if (d._thumbs) return d._thumbs;
     d._thumbs = st.blocks.map(b => {
       const c = U.canvas(W * 0.8, H * 0.8), g = c.getContext('2d'), cw = c.width, ch = c.height;
-      g.fillStyle = '#2e1d10'; g.fillRect(0, 0, cw, ch);
-      g.globalAlpha = 0.25; g.drawImage(texWood, 0, 0, cw, ch); g.globalAlpha = 1;
       const label = b.kind === 'key' ? d.raster.keyLabel : b.region.label;
-      g.drawImage(R.silhouette(d, label, '#0d0703'), 2.5, 3, cw, ch);                 // 影
-      const rim = R.silhouette(d, label, '#f3dfb8');                                    // 明るい木の縁
-      [[-1.6, 0], [1.6, 0], [0, -1.6], [0, 1.6], [-1.1, -1.1], [1.1, 1.1], [1.1, -1.1], [-1.1, 1.1]].forEach(([x, y]) => g.drawImage(rim, x, y, cw, ch));
-      g.drawImage(R.plate(d, label), 0, 0, cw, ch);                                      // 版の色
+      const ink = b.kind === 'key' ? '#1d1a18' : R.regionHex(b.region);
+      const lum = parseInt(ink.slice(1, 3), 16) * 0.299 + parseInt(ink.slice(3, 5), 16) * 0.587 + parseInt(ink.slice(5, 7), 16) * 0.114;
+      g.fillStyle = lum > 135 ? '#3f2b19' : '#c9a473'; g.fillRect(0, 0, cw, ch);     // 版の色が映えるよう、淡い色は濃い木地、濃い色は明るい木地
+      g.globalAlpha = 0.15; g.drawImage(texWood, 0, 0, cw, ch); g.globalAlpha = 1;
+      g.globalAlpha = 0.8; g.drawImage(R.silhouette(d, label, '#140b05'), 1.8, 2.2, cw, ch); g.globalAlpha = 1;   // 影（右下）
+      g.drawImage(R.silhouette(d, label, '#e2bd88'), -1.2, -1.2, cw, ch);                                        // 木の縁の光（左上）
+      // 版の面：摺る色の絵の具をのせた状態（木目がうっすら透ける）
+      const face = U.canvas(cw, ch), f = face.getContext('2d');
+      f.drawImage(R.silhouette(d, label, ink), 0, 0, cw, ch);
+      f.globalCompositeOperation = 'source-atop'; f.globalAlpha = 0.12; f.drawImage(texWood, 0, 0, cw, ch);
+      g.drawImage(face, 0, 0);
       g.strokeStyle = '#5a381f'; g.lineWidth = 4; g.strokeRect(2, 2, cw - 4, ch - 4);
       return c.toDataURL('image/jpeg', 0.88);
     });
