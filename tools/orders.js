@@ -1,6 +1,6 @@
 // 使い方: Web サーバーで index.html を開ける状態にして node tools/orders.js（Playwright が必要）
-// 結果は orders.json に出力。js/meisaku.js の orders（先頭は tools/layers.py の最も完成図に近い順番）に反映する
-// ゲームの描画エンジンで、すべての順番を実際に摺って完成図と比べ、正しい順番を決める
+// 結果は orders.json に出力。js/meisaku.js の orders（先頭は tools/layers.py の摺師の順番）に反映する
+// ゲームの描画エンジンで、主版が最初のすべての順番を実際に摺って完成図と比べ、正しい順番を決める
 const { chromium } = require('playwright'); const fs = require('fs');
 (async () => {
   const b = await chromium.launch(); const p = await b.newPage({ viewport: { width: 1280, height: 860 } });
@@ -15,10 +15,10 @@ const { chromium } = require('playwright'); const fs = require('fs');
       const lab = k => (k === 0 ? 1 : st.blocks[k].region.label), idx = l => (l === 1 ? 0 : st.blocks.findIndex(b => b.region && b.region.label === l));
       const px = order => { const c = R.render(d, st, { S: 0.5, order }); return c.getContext('2d').getImageData(0, 0, c.width, c.height).data; };
       const diff = (a, b) => { let n = 0; for (let k = 0; k < a.length; k += 4) if (Math.abs(a[k] - b[k]) + Math.abs(a[k + 1] - b[k + 1]) + Math.abs(a[k + 2] - b[k + 2]) > 30) n++; return n / (a.length / 4) * 100; };
-      const best = d.orders[0].map(idx);           // 版の形を合わせた、完成図に最も近い順番（tools/layers.py）
+      const best = d.orders[0].map(idx);           // 摺師の順番（主版→淡い色→濃い色。tools/layers.py）
       const ref = px(best);
       const perms = a => a.length <= 1 ? [a] : a.flatMap((x, i) => perms([...a.slice(0, i), ...a.slice(i + 1)]).map(q => [x, ...q]));
-      const res = perms([...Array(nb).keys()]).map(o => ({ o: o.map(lab), c: diff(px(o), ref) }));
+      const res = perms([...Array(nb).keys()]).filter(o => o[0] === 0).map(o => ({ o: o.map(lab), c: diff(px(o), ref) }));
       const ok = res.filter(x => x.c < 1.0), bad = res.filter(x => x.c >= 1.0);
       return { id: d.id, orders: ok.map(x => x.o), okMax: Math.max(...ok.map(x => x.c)), badMin: bad.length ? Math.min(...bad.map(x => x.c)) : null };
     });

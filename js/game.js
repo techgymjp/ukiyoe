@@ -196,7 +196,7 @@
     const k = cs[P.view];
     if (P.pickFor !== P.picked.length) { P.pickFor = P.picked.length; P.pickT0 = performance.now(); }
     P.preview = k;
-    panel.innerHTML = `<p class="howto">第<b>${P.picked.length + 1}</b>版 / 全${n}版：<b>次に摺る版</b>はどれ？<br><small>めくると、摺った時の色が紙にうっすら映ります。版を摺ると前の色を上書きします。完成図になる順番は？</small></p>
+    panel.innerHTML = `<p class="howto">第<b>${P.picked.length + 1}</b>版 / 全${n}版：<b>次に摺る版</b>はどれ？<br><small>主版（輪郭線）が最初。色板は淡い色から濃い色へ。めくると、摺った時の色が紙にうっすら映ります。</small></p>
       <div class="ptime"><div id="pk-time"></div><span id="pk-bonus"></span></div>
       <div class="cand">
         <button class="cand-nav" id="b-prev" aria-label="前の版" ${cs.length < 2 ? 'disabled' : ''}>◀</button>
@@ -296,7 +296,7 @@
     Sfx.play('bad');
     const th = thumbs(G.design, G.st);
     panel.innerHTML = `<div class="role"><span class="role-seal">終</span>${G.design.title}</div>
-      <p class="howto">この順番では、あとから摺った版が先の色を上書きして、完成図と違ってしまいます。正しい順番の例：</p>
+      <p class="howto">${P.picked[0] !== 0 ? '最初に<b>主版（輪郭線）</b>を摺って、色をのせる基準にします。' : 'この順番では、あとから摺った色が先の濃い色を上書きして、完成図と違ってしまいます。色板は<b>淡い色から濃い色へ</b>。'}正しい順番：</p>
       <div class="blocks answer">${G.design.orders[0].map(l => (l === 1 ? 0 : G.st.blocks.findIndex(b => b.region && b.region.label === l))).map((k, n) => `<div class="blockcard"><img src="${th[k]}" alt=""><span>${n + 1}番目</span></div>`).join('')}</div>
       <div class="controls"><button class="btn primary big" id="b-retry">この図からやり直す</button></div>
       <div class="controls"><button class="btn" id="b-share">シェア</button><button class="btn" id="b-title">タイトルへ</button></div>`;
