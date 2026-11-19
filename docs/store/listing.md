@@ -6,7 +6,9 @@
 |---|---|---|
 | `icon_512.png` | アプリのアイコン | 512×512 |
 | `feature_graphic_1024x500.png` | フィーチャーグラフィック | 1024×500 |
-| `screenshot_1.png` 〜 `screenshot_5.png` | スマートフォンのスクリーンショット（この順に並べる） | 1080×1920 |
+| `screenshot_1.png` 〜 `screenshot_5.png` | スマートフォンのスクリーンショット・日本語（この順に並べる） | 1080×1920 |
+| `en/feature_graphic_en_1024x500.png` | フィーチャーグラフィック・英語 | 1024×500 |
+| `en/screenshot_en_1.png` 〜 `en/screenshot_en_5.png` | スマートフォンのスクリーンショット・英語（この順に並べる） | 1080×1920 |
 
 - カテゴリ：ゲーム ＞ パズル
 - タグ（Play Console で選ぶ）：パズル、ロジック、カジュアル、シングルプレイヤー、オフライン
@@ -66,7 +68,7 @@
 Ukiyo-e Printer: Block Puzzle
 
 **Short description** (80 characters max)
-Find the right block order and print Hokusai and Hiroshige masterpieces.
+Japanese woodblock print puzzle: find the block order and print Hokusai's Wave.
 
 **Full description** (4000 characters max)
 An ukiyo-e print is made by printing one color at a time from many carved woodblocks.
