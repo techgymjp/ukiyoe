@@ -279,12 +279,11 @@
     const last = G.idx + 1 >= STAGES.length;
     panel.innerHTML = `<div class="role"><span class="role-seal">完</span>第${G.idx + 1}図 クリア</div>
       <h2>${G.design.title}<span class="yomi">${G.design.artist}</span></h2>
-      <p class="howto">摺り上がり！ <b>${score}点</b>${P.bonusSum ? `＋早さボーナス <b>${P.bonusSum}点</b>` : ''}　${last ? '' : 'まもなく次の浮世絵へ…'}</p>
+      <p class="howto">摺り上がり！ <b>${score}点</b>${P.bonusSum ? `＋早さボーナス <b>${P.bonusSum}点</b>` : ''}</p>
       <div class="controls"><button class="btn primary big" id="b-next">${last ? '結果を見る' : '次の浮世絵へ'}</button><button class="btn" id="b-share">シェア</button></div>
       <p class="note desc">${G.design.credit}</p>`;
     $('#b-next').onclick = nextStage;
-    $('#b-share').onclick = () => { clearTimeout(P.timer); share(`浮世絵職人で第${G.idx + 1}図「${G.design.title}」を摺り上げた！ ${score}点（総得点 ${G.total}点）`); };
-    P.timer = setTimeout(nextStage, 4200);
+    $('#b-share').onclick = () => { share(`浮世絵職人で第${G.idx + 1}図「${G.design.title}」を摺り上げた！ ${score}点（総得点 ${G.total}点）`); };
     if (G.retries) $('#b-next').insertAdjacentHTML('afterend', `<p class="note">やり直し ${G.retries}回</p>`);
   }
   function nextStage() {
