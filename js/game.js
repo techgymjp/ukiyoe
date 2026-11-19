@@ -54,6 +54,12 @@
     $('#stagebar').innerHTML = G.design ? `<b>第${G.idx + 1}図</b> / 全${STAGES.length}図<span>得点 ${G.total}</span>${G.combo > 1 ? `<em>${G.combo}連続</em>` : ''}` : '';
   }
   const PREF = 'ukiyoe-shokunin-progress';
+  const SHARE_URL = 'https://techgym.jp/column/claude-code-game-ukiyoe/'; // シェアに付ける紹介記事のURL
+  /* 進み具合：図の番号と、その図を始めた時点の総得点（途中の図はやり直しになるので、その図の得点は含めない） */
+  function saveProgress(idx) {
+    if (idx >= STAGES.length) return;
+    pref(PREF, String(idx)); pref(PREF + '-score', JSON.stringify({ idx, total: G.total, retries: G.retries }));
+  }
   const pref = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) { return null; } };
 
   /* ───────── 判定演出 ───────── */
@@ -148,7 +154,7 @@
   async function startStage(i) {
     setPicking(false);
     clearTimeout(P.timer); FX.t0 = -1e9; FX.stay = false;
-    G.idx = i; pref(PREF, String(i));
+    G.idx = i; P.undos = 0; saveProgress(i);
     const d = STAGES[i];
     show('screen-work'); G.playing = false;
     panel.innerHTML = '<p class="howto">版木を用意しています…</p>';
@@ -254,10 +260,14 @@
   }
   function stageClear() {
     P.phase = 'clear';
-    const even = P.rubs.reduce((a, v) => a + v, 0) / P.rubs.length, perfect = P.rubs.every(v => v >= 0.97);
-    const score = perfect ? 100 : Math.round(60 + 40 * U.clamp((even - 0.5) / 0.47, 0, 1));
-    G.total += score; stageBar();
-    fx(perfect ? 'PERFECT!' : 'CLEAR!', perfect ? `見事！ ${score}点` : `${score}点　ムラなく摺れば満点`, perfect);
+    // 満点（PERFECT）＝全部の版を最後まで摺り切り、やり直し（広告）も使わずにクリア
+    const even = P.rubs.reduce((a, v) => a + v, 0) / P.rubs.length, full = P.rubs.every(v => v >= 0.97);
+    const undo = P.undos || 0, perfect = full && !undo;
+    const rubScore = full ? 100 : Math.round(60 + 40 * U.clamp((even - 0.5) / 0.47, 0, 1));
+    const score = Math.max(30, rubScore - 30 * undo);
+    G.total += score; stageBar(); saveProgress(G.idx + 1);
+    const why = undo ? `やり直し${undo}回` : '最後まで摺り切れば満点';
+    fx(perfect ? 'PERFECT!' : 'CLEAR!', perfect ? `見事！ ${score}点` : `${score}点　${why}`, perfect);
     Sfx.play('fanfare');
     P.finalCv = R.render(G.design, G.st, { S: 2, order: P.picked });
     saveGallery(score);
@@ -265,9 +275,10 @@
     panel.innerHTML = `<div class="role"><span class="role-seal">完</span>第${G.idx + 1}図 クリア</div>
       <h2>${G.design.title}<span class="yomi">${G.design.artist}</span></h2>
       <p class="howto">摺り上がり！ <b>${score}点</b>${P.bonusSum ? `＋早さボーナス <b>${P.bonusSum}点</b>` : ''}　${last ? '' : 'まもなく次の浮世絵へ…'}</p>
-      <div class="controls"><button class="btn primary big" id="b-next">${last ? '結果を見る' : '次の浮世絵へ'}</button></div>
+      <div class="controls"><button class="btn primary big" id="b-next">${last ? '結果を見る' : '次の浮世絵へ'}</button><button class="btn" id="b-share">シェア</button></div>
       <p class="note desc">${G.design.credit}</p>`;
     $('#b-next').onclick = nextStage;
+    $('#b-share').onclick = () => { clearTimeout(P.timer); share(`浮世絵職人で第${G.idx + 1}図「${G.design.title}」を摺り上げた！ ${score}点（総得点 ${G.total}点）`); };
     P.timer = setTimeout(nextStage, 4200);
     if (G.retries) $('#b-next').insertAdjacentHTML('afterend', `<p class="note">やり直し ${G.retries}回</p>`);
   }
@@ -318,14 +329,14 @@
     G.st.results[k] = undefined;
     P.base = renderPicked(1);
     FX.t0 = -1e9; FX.stay = false;
-    G.retries++;
+    G.retries++; P.undos = (P.undos || 0) + 1;
     P.phase = 'pick'; P.view = 0; P.pickFor = -1;
     toast(`やり直し（${G.retries}回目）`, 'good');
     panelPick();
   }
   /* シェア：アプリでは Android の共有メニュー、Web では共有 API か X（旧 Twitter） */
   async function share(text) {
-    const url = NATIVE ? 'https://play.google.com/store/apps/details?id=jp.techgym.ukiyoe' : location.href.split('#')[0];
+    const url = SHARE_URL;
     const nativeShare = plugin('Share');
     if (nativeShare) { try { await nativeShare.share({ title: '浮世絵職人', text, url, dialogTitle: 'シェア' }); } catch (e) { /* キャンセル */ } }
     else if (navigator.share) { try { await navigator.share({ title: '浮世絵職人', text, url }); } catch (e) { /* キャンセル */ } }
@@ -526,10 +537,15 @@
     show('screen-title');
   }
   const newGame = i => { Sfx.init(); G.total = 0; G.combo = 0; G.retries = 0; startStage(i); };
+  /* つづきから：保存しておいた総得点・やり直し回数を戻して再開 */
+  const resumeGame = i => {
+    let s = {}; try { s = JSON.parse(pref(PREF + '-score') || '{}'); } catch (e) {}
+    Sfx.init(); G.total = s.idx === i ? +s.total || 0 : 0; G.combo = 0; G.retries = s.idx === i ? +s.retries || 0 : 0; startStage(i);
+  };
   $('#btn-start').onclick = withAd(() => newGame(0));
-  $('#btn-continue').onclick = withAd(() => newGame(+(pref(PREF) || 0)));
+  $('#btn-continue').onclick = withAd(() => resumeGame(+(pref(PREF) || 0)));
   $('#btn-howto').onclick = () => { Sfx.play('tap'); show('screen-howto'); window.scrollTo(0, 0); };
-  $('#btn-howto-start').onclick = withAd(() => newGame(+(pref(PREF) || 0) < STAGES.length ? +(pref(PREF) || 0) : 0));
+  $('#btn-howto-start').onclick = withAd(() => { const i = +(pref(PREF) || 0); i > 0 && i < STAGES.length ? resumeGame(i) : newGame(0); });
   $('#btn-howto-back').onclick = withAd(toTitle);
   $('#btn-home').onclick = () => { if (G.playing && ['intro', 'pick', 'rub'].includes(P.phase)) { setPaused(true); return; } Ads.showInterstitial().then(toTitle); };
   $('#btn-gallery').onclick = () => { if (G.playing && ['intro', 'pick', 'rub'].includes(P.phase)) { setPaused(true); return; } showGallery(); };
