@@ -337,3 +337,9 @@ body.playing .pausebtn { display: block; }
 
 /* 狭い画面では上部の「図鑑」は出さない（タイトル画面のボタンから開く） */
 @media (max-width: 480px) { #btn-zukan { display: none; } }
+.lang-link { text-align: center; margin: 10px 0 0; font-size: 14px; }
+.lang-link a { color: var(--ink2); }
+/* 英語表示：和文用の字間をやめて読みやすく */
+html[lang="en"] .sec, html[lang="en"] .panel h2, html[lang="en"] .howto-main h1, html[lang="en"] .overlay-box h2 { letter-spacing: .02em; }
+html[lang="en"] .panel h2 { font-size: 22px; }
+html[lang="en"] .sec small { white-space: nowrap; letter-spacing: 0; }

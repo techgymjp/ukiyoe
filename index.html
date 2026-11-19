@@ -12,13 +12,13 @@
 </head>
 <body data-screen="screen-title">
 <header class="topbar">
-  <button class="brand" id="btn-home" title="表題へ"><span class="brand-seal">浮</span><span class="brand-text">浮世絵職人</span></button>
+  <button class="brand" id="btn-home" title="表題へ" data-i18n-label="title"><span class="brand-seal">浮</span><span class="brand-text">浮世絵職人</span></button>
   <div class="stagebar" id="stagebar"></div>
   <div class="top-actions">
-    <button class="btn small" id="btn-zukan">図鑑</button>
-    <button class="btn small" id="btn-gallery">画廊</button>
+    <button class="btn small" id="btn-zukan" data-i18n="zukan">図鑑</button>
+    <button class="btn small" id="btn-gallery" data-i18n="gallery">画廊</button>
     <button class="btn small" id="btn-bgm" aria-pressed="true" title="BGM">♪<span class="hide-sm"> BGM</span></button>
-    <button class="btn small" id="btn-sound" aria-pressed="true" title="効果音"><span class="hide-sm">効果</span>音</button>
+    <button class="btn small" id="btn-sound" aria-pressed="true" title="効果音" data-i18n="sound"><span class="hide-sm">効果</span>音</button>
   </div>
 </header>
 
@@ -26,19 +26,21 @@
   <section id="screen-title" class="screen">
     <div class="hero">
       <h1><span>浮</span><span>世</span><span>絵</span><span>職</span><span>人</span></h1>
-      <p class="lead">お手本を見て、<b>版を摺る順番</b>を見抜けるか。</p>
+      <p class="lead" data-i18n="lead">お手本を見て、<b>版を摺る順番</b>を見抜けるか。</p>
       <div class="start-btns">
-        <button class="btn primary big" id="btn-start">はじめる</button>
+        <button class="btn primary big" id="btn-start" data-i18n="start">はじめる</button>
         <button class="btn big" id="btn-continue" hidden>つづきから</button>
       </div>
       <p class="hiscore" id="hiscore"></p>
-      <p class="howto-link"><button class="btn" id="btn-howto">遊び方</button> <button class="btn" id="btn-zukan2">図鑑</button></p>
+      <p class="howto-link"><button class="btn" id="btn-howto" data-i18n="howto">遊び方</button> <button class="btn" id="btn-zukan2" data-i18n="zukan">図鑑</button></p>
+      <p class="lang-link"><a href="#" class="lang-toggle">English</a></p>
     </div>
-    <footer class="foot">作品はすべてメトロポリタン美術館が公開するパブリックドメイン（CC0）の原画を色分解して版にしています。
-      <span class="legal"><span id="buildInfo"></span> <a href="https://techgym.jp/privacy-policy/" target="_blank" rel="noopener">プライバシーポリシー</a><span id="adPrivacy" hidden>｜<a href="#" id="adPrivacyLink">広告の設定</a></span></span></footer>
+    <footer class="foot"><span data-i18n="foot">作品はすべてメトロポリタン美術館が公開するパブリックドメイン（CC0）の原画を色分解して版にしています。</span>
+      <span class="legal"><span id="buildInfo"></span> <a href="https://techgym.jp/privacy-policy/" target="_blank" rel="noopener" data-i18n="privacy">プライバシーポリシー</a><span id="adPrivacy" hidden>｜<a href="#" id="adPrivacyLink" data-i18n="adPrivacy">広告の設定</a></span></span></footer>
   </section>
 
   <section id="screen-howto" class="screen howto-main">
+<div data-i18n="howtoBody">
   <h1>遊び方</h1>
   <p class="lead">浮世絵は、何枚もの版木を一色ずつ紙に摺り重ねてできています。<br>お手本を見て、<b>版を摺る順番</b>を見抜き、自分の手で摺り上げましょう。</p>
 
@@ -63,35 +65,37 @@
   <p>葛飾北斎・歌川広重の風景画、喜多川歌麿・鈴木春信の美人画、東洲斎写楽の役者絵（歌舞伎）など全20図。版の少ない、やさしい順に出題されます。途中でやめても「つづきから」で再開できます。</p>
   <p class="note">作品はすべてメトロポリタン美術館が公開するパブリックドメイン（CC0）の原画を色分解して版にしています。</p>
 
-  <div class="howto-back"><button class="btn primary big" id="btn-howto-start">はじめる</button><button class="btn big" id="btn-howto-back">タイトルへ戻る</button></div>
+</div>
+  <div class="howto-back"><button class="btn primary big" id="btn-howto-start" data-i18n="start">はじめる</button><button class="btn big" id="btn-howto-back" data-i18n="back">タイトルへ戻る</button></div>
 </section>
 
   <section id="screen-work" class="screen">
-    <div class="stage-wrap"><canvas id="cv"></canvas><div id="toast"></div><button class="pausebtn" id="btn-pause" aria-label="一時停止">❚❚</button></div>
+    <div class="stage-wrap"><canvas id="cv"></canvas><div id="toast"></div><button class="pausebtn" id="btn-pause" aria-label="一時停止" data-i18n-label="pause">❚❚</button></div>
     <aside id="panel" class="panel"></aside>
   </section>
 
   <section id="screen-zukan" class="screen">
-    <div class="gal-head"><h2 class="sec">図鑑 <small id="zukan-count"></small></h2><button class="btn" id="btn-zukan-back">表題へ戻る</button></div>
-    <p class="note">一度摺り上げた浮世絵が載ります。</p>
+    <div class="gal-head"><h2 class="sec"><span data-i18n="zukan">図鑑</span> <small id="zukan-count"></small></h2><button class="btn" id="btn-zukan-back" data-i18n="back">表題へ戻る</button></div>
+    <p class="note" data-i18n="zukanNote">一度摺り上げた浮世絵が載ります。</p>
     <div id="zukan-list" class="gallery zukan"></div>
   </section>
   <section id="screen-gallery" class="screen">
-    <div class="gal-head"><h2 class="sec">画廊</h2><button class="btn" id="btn-gallery-back">表題へ戻る</button></div>
+    <div class="gal-head"><h2 class="sec" data-i18n="gallery">画廊</h2><button class="btn" id="btn-gallery-back" data-i18n="back">表題へ戻る</button></div>
     <div id="gallery-list" class="gallery"></div>
   </section>
 </main>
 <div id="viewer"><img alt="作品"><p class="viewer-cap"></p></div>
 <div id="pause" class="overlay" hidden>
   <div class="overlay-box">
-    <h2>一時停止</h2>
-    <div class="controls"><button class="btn primary big" id="btn-resume">つづける</button></div>
-    <div class="controls"><button class="btn big" id="btn-pause-title">タイトルへ戻る</button></div>
+    <h2 data-i18n="pause">一時停止</h2>
+    <div class="controls"><button class="btn primary big" id="btn-resume" data-i18n="resume">つづける</button></div>
+    <div class="controls"><button class="btn big" id="btn-pause-title" data-i18n="back">タイトルへ戻る</button></div>
   </div>
 </div>
 
 <script src="js/ads-config.js"></script>
 <script src="js/build-info.js"></script>
+<script src="js/i18n.js"></script>
 <script src="js/util.js"></script>
 <script src="js/designs.js"></script>
 <script src="js/meisaku.js"></script>

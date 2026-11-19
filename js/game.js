@@ -48,10 +48,11 @@
     const t = $('#toast'); t.textContent = msg; t.className = 'show ' + kind;
     clearTimeout(toastTimer); toastTimer = setTimeout(() => t.className = '', 1600);
   }
+  const t = I18N.t, W_ = (d, f) => I18N.work(d, f);
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const bgWood = g => g.drawImage(texWood, -OX, -OY, VW, VH);
   function stageBar() {
-    $('#stagebar').innerHTML = G.design ? `<b>第${G.idx + 1}図</b> / 全${STAGES.length}図<span>得点 ${G.total}</span>${G.combo > 1 ? `<em>${G.combo}連続</em>` : ''}` : '';
+    $('#stagebar').innerHTML = G.design ? t(`<b>第${G.idx + 1}図</b> / 全${STAGES.length}図<span>得点 ${G.total}</span>${G.combo > 1 ? `<em>${G.combo}連続</em>` : ''}`, `<b>No.${G.idx + 1}</b>/${STAGES.length}<span>${G.total} pts</span>${G.combo > 1 ? `<em>×${G.combo}</em>` : ''}`) : '';
   }
   const PREF = 'ukiyoe-shokunin-progress';
   const SHARE_URL = 'https://techgym.jp/column/claude-code-game-ukiyoe/'; // シェアに付ける紹介記事のURL
@@ -162,11 +163,11 @@
     G.idx = i; P.undos = 0; saveProgress(i);
     const d = STAGES[i];
     show('screen-work'); G.playing = false;
-    panel.innerHTML = '<p class="howto">版木を用意しています…</p>';
+    panel.innerHTML = `<p class="howto">${t('版木を用意しています…', 'Preparing the woodblocks…')}</p>`;
     try { await R.loadRaster(d); }
     catch (e) {
       d._rs = null;
-      panel.innerHTML = '<p class="howto">版木の読み込みに失敗しました。GitHub Pages などのWebサーバー経由で開いてください。</p><div class="controls"><button class="btn" id="b-title">タイトルへ</button></div>';
+      panel.innerHTML = `<p class="howto">${t('版木の読み込みに失敗しました。GitHub Pages などのWebサーバー経由で開いてください。', 'Could not load the woodblocks. Please open this page from a web server.')}</p><div class="controls"><button class="btn" id="b-title">${t('タイトルへ', 'Title')}</button></div>`;
       $('#b-title').onclick = toTitle; return;
     }
     G.design = d; setDims(d);
@@ -179,10 +180,11 @@
     P.base = renderPicked(1);
     stageBar(); G.playing = true;
     Sfx.play('paper');
-    panel.innerHTML = `<div class="role"><span class="role-seal">${G.idx + 1}</span>第${G.idx + 1}図　${d.genre}</div>
-      <h2>${d.title}<span class="yomi">${d.artist}${d.series ? '『' + d.series + '』' : ''}</span></h2>
-      <p class="howto">お手本をよく見よう。この浮世絵は <b>${G.st.blocks.length}枚の版</b>を摺り重ねてできています。</p>
-      <div class="controls"><button class="btn primary big" id="b-go">摺りはじめる</button></div>`;
+    const ser = W_(d, 'series');
+    panel.innerHTML = `<div class="role"><span class="role-seal">${G.idx + 1}</span>${t(`第${G.idx + 1}図　`, `No.${G.idx + 1} · `)}${W_(d, 'genre')}</div>
+      <h2>${W_(d, 'title')}<span class="yomi">${W_(d, 'artist')}${ser ? t('『' + ser + '』', ', ' + ser) : ''}</span></h2>
+      <p class="howto">${t(`お手本をよく見よう。この浮世絵は <b>${G.st.blocks.length}枚の版</b>を摺り重ねてできています。`, `Study the model. This print is made of <b>${G.st.blocks.length} blocks</b>.`)}</p>
+      <div class="controls"><button class="btn primary big" id="b-go">${t('摺りはじめる', 'Start printing')}</button></div>`;
     $('#b-go').onclick = toPick;
     P.timer = setTimeout(toPick, 4000);
   }
@@ -201,15 +203,15 @@
     const k = cs[P.view];
     if (P.pickFor !== P.picked.length) { P.pickFor = P.picked.length; P.pickT0 = performance.now(); }
     P.preview = k;
-    panel.innerHTML = `<p class="howto">第<b>${P.picked.length + 1}</b>版 / 全${n}版：<b>次に摺る版</b>はどれ？<br><small>主版（輪郭線）が最初。色板は淡い色から濃い色へ。めくると、摺った時の色が紙にうっすら映ります。</small></p>
+    panel.innerHTML = `<p class="howto">${t(`第<b>${P.picked.length + 1}</b>版 / 全${n}版：<b>次に摺る版</b>はどれ？<br><small>主版（輪郭線）が最初。色板は淡い色から濃い色へ。めくると、摺った時の色が紙にうっすら映ります。</small>`, `Block <b>${P.picked.length + 1}</b> of ${n}: which block <b>comes next</b>?<br><small>The key block (outlines) comes first, then colors from light to dark. Flip to preview each block on the paper.</small>`)}</p>
       <div class="ptime"><div id="pk-time"></div><span id="pk-bonus"></span></div>
       <div class="cand">
-        <button class="cand-nav" id="b-prev" aria-label="前の版" ${cs.length < 2 ? 'disabled' : ''}>◀</button>
-        <div class="cand-card" id="cand"><img src="${th[k]}" alt="版木"><span>${P.view + 1} / ${cs.length}</span></div>
-        <button class="cand-nav" id="b-next2" aria-label="次の版" ${cs.length < 2 ? 'disabled' : ''}>▶</button>
+        <button class="cand-nav" id="b-prev" aria-label="${t('前の版', 'Previous block')}" ${cs.length < 2 ? 'disabled' : ''}>◀</button>
+        <div class="cand-card" id="cand"><img src="${th[k]}" alt="${t('版木', 'Woodblock')}"><span>${P.view + 1} / ${cs.length}</span></div>
+        <button class="cand-nav" id="b-next2" aria-label="${t('次の版', 'Next block')}" ${cs.length < 2 ? 'disabled' : ''}>▶</button>
       </div>
       <div class="cand-dots">${cs.map((_, i) => `<i class="${i === P.view ? 'on' : ''}"></i>`).join('')}</div>
-      <div class="controls"><button class="btn primary big" id="b-pick">この版を摺る</button></div>`;
+      <div class="controls"><button class="btn primary big" id="b-pick">${t('この版を摺る', 'Print this block')}</button></div>`;
     const flip = dir => { if (cs.length < 2) return; P.view = (P.view + dir + cs.length) % cs.length; Sfx.play('paper'); panelPick(); };
     $('#b-prev').onclick = () => flip(-1);
     $('#b-next2').onclick = () => flip(1);
@@ -230,10 +232,10 @@
     P.cov = new Float32Array(GW * GH); P.started = false; P.last = null; P.dirty = true;
     P.tmp = U.canvas(P.full.width, P.full.height); P.covCv = U.canvas(GW, GH);
     P.phase = 'rub';
-    panel.innerHTML = `<div class="role"><span class="role-seal">摺</span>${G.design.title}</div>
-      <p class="howto">ばれんで紙を<b>まんべんなくこすって</b>摺ろう。</p>
+    panel.innerHTML = `<div class="role"><span class="role-seal">摺</span>${W_(G.design, 'title')}</div>
+      <p class="howto">${t('ばれんで紙を<b>まんべんなくこすって</b>摺ろう。', 'Rub the paper <b>evenly</b> with the baren.')}</p>
       <div class="meter"><div class="meter-fill" id="sr-fill"></div><span id="sr-txt"></span></div>
-      <div class="controls"><button class="btn ghost" id="b-fin">摺り上げる</button></div>`;
+      <div class="controls"><button class="btn ghost" id="b-fin">${t('摺り上げる', 'Finish')}</button></div>`;
     $('#b-fin').onclick = () => (covMean() >= 0.6 ? completeRub() : finishRub());
   }
   /* 8割こすれたら残りを一気に摺り切って100%に */
@@ -259,7 +261,7 @@
     G.combo++;
     const bonus = Math.round(P.pickBonus * (1 + Math.min(G.combo - 1, 10) * 0.1));
     G.total += bonus; P.bonusSum = (P.bonusSum || 0) + bonus; stageBar();
-    Sfx.play('good'); toast(`正解！ ${bonus > 0 ? `早さボーナス +${bonus}` : ''}${G.combo > 1 ? `　${G.combo}連続！` : ''}`, 'good');
+    Sfx.play('good'); toast(t(`正解！ ${bonus > 0 ? `早さボーナス +${bonus}` : ''}${G.combo > 1 ? `　${G.combo}連続！` : ''}`, `Correct! ${bonus > 0 ? `Speed bonus +${bonus}` : ''}${G.combo > 1 ? `  ${G.combo} combo!` : ''}`), 'good');
     if (P.picked.length >= st.blocks.length) { stageClear(); return; }
     P.phase = 'pick'; P.view = 0; panelPick();
   }
@@ -271,20 +273,20 @@
     const rubScore = full ? 100 : Math.round(60 + 40 * U.clamp((even - 0.5) / 0.47, 0, 1));
     const score = Math.max(30, rubScore - 30 * undo);
     G.total += score; stageBar(); saveProgress(G.idx + 1);
-    const why = undo ? `やり直し${undo}回` : '最後まで摺り切れば満点';
-    fx(perfect ? 'PERFECT!' : 'CLEAR!', perfect ? `見事！ ${score}点` : `${score}点　${why}`, perfect);
+    const why = undo ? t(`やり直し${undo}回`, `${undo} retr${undo > 1 ? 'ies' : 'y'}`) : t('最後まで摺り切れば満点', 'Print every block fully for a perfect score');
+    fx(perfect ? 'PERFECT!' : 'CLEAR!', perfect ? t(`見事！ ${score}点`, `Splendid! ${score} pts`) : t(`${score}点　${why}`, `${score} pts  ${why}`), perfect);
     Sfx.play('fanfare');
     P.finalCv = R.render(G.design, G.st, { S: 2, order: P.picked });
     saveGallery(score); recordZukan(score);
     const last = G.idx + 1 >= STAGES.length;
-    panel.innerHTML = `<div class="role"><span class="role-seal">完</span>第${G.idx + 1}図 クリア</div>
-      <h2>${G.design.title}<span class="yomi">${G.design.artist}</span></h2>
-      <p class="howto">摺り上がり！ <b>${score}点</b>${P.bonusSum ? `＋早さボーナス <b>${P.bonusSum}点</b>` : ''}</p>
-      <div class="controls"><button class="btn primary big" id="b-next">${last ? '結果を見る' : '次の浮世絵へ'}</button><button class="btn" id="b-share">シェア</button></div>
-      <p class="note desc">${G.design.credit}</p>`;
+    panel.innerHTML = `<div class="role"><span class="role-seal">完</span>${t(`第${G.idx + 1}図 クリア`, `No.${G.idx + 1} cleared`)}</div>
+      <h2>${W_(G.design, 'title')}<span class="yomi">${W_(G.design, 'artist')}</span></h2>
+      <p class="howto">${t(`摺り上がり！ <b>${score}点</b>${P.bonusSum ? `＋早さボーナス <b>${P.bonusSum}点</b>` : ''}`, `Printed! <b>${score} pts</b>${P.bonusSum ? ` + speed bonus <b>${P.bonusSum} pts</b>` : ''}`)}</p>
+      <div class="controls"><button class="btn primary big" id="b-next">${last ? t('結果を見る', 'See results') : t('次の浮世絵へ', 'Next print')}</button><button class="btn" id="b-share">${t('シェア', 'Share')}</button></div>
+      <p class="note desc">${W_(G.design, 'credit')}</p>`;
     $('#b-next').onclick = nextStage;
-    $('#b-share').onclick = () => { share(`浮世絵職人で第${G.idx + 1}図「${G.design.title}」を摺り上げた！ ${score}点（総得点 ${G.total}点）`); };
-    if (G.retries) $('#b-next').insertAdjacentHTML('afterend', `<p class="note">やり直し ${G.retries}回</p>`);
+    $('#b-share').onclick = () => { share(t(`浮世絵職人で第${G.idx + 1}図「${G.design.title}」を摺り上げた！ ${score}点（総得点 ${G.total}点）`, `I printed No.${G.idx + 1} “${W_(G.design, 'title')}” in Ukiyo-e Printer! ${score} pts (total ${G.total})`)); };
+    if (G.retries) $('#b-next').insertAdjacentHTML('afterend', `<p class="note">${t(`やり直し ${G.retries}回`, `Retries: ${G.retries}`)}</p>`);
   }
   function nextStage() {
     clearTimeout(P.timer);
@@ -295,18 +297,18 @@
   }
   function gameOver() {
     P.phase = 'over'; clearTimeout(P.timer); G.combo = 0; stageBar();
-    fx('GAME OVER', '版の順番がちがう！', false, '#ff8a6a', true);
+    fx('GAME OVER', t('版の順番がちがう！', 'Wrong block order!'), false, '#ff8a6a', true);
     if (G.total > +(pref(HIKEY) || 0)) pref(HIKEY, String(G.total));
     Sfx.play('bad');
     const th = thumbs(G.design, G.st);
-    panel.innerHTML = `<div class="role"><span class="role-seal">終</span>${G.design.title}</div>
-      <p class="howto">${P.picked[0] !== 0 ? '最初に<b>主版（輪郭線）</b>を摺って、色をのせる基準にします。' : 'この順番では、あとから摺った色が先の濃い色を上書きして、完成図と違ってしまいます。色板は<b>淡い色から濃い色へ</b>。'}正しい順番：</p>
-      <div class="blocks answer">${G.design.orders[0].map(l => (l === 1 ? 0 : G.st.blocks.findIndex(b => b.region && b.region.label === l))).map((k, n) => `<div class="blockcard"><img src="${th[k]}" alt=""><span>${n + 1}番目</span></div>`).join('')}</div>
-      <div class="controls"><button class="btn primary big" id="b-retry">この図からやり直す</button></div>
-      <div class="controls"><button class="btn" id="b-share">シェア</button><button class="btn" id="b-title">タイトルへ</button></div>`;
+    panel.innerHTML = `<div class="role"><span class="role-seal">終</span>${W_(G.design, 'title')}</div>
+      <p class="howto">${P.picked[0] !== 0 ? t('最初に<b>主版（輪郭線）</b>を摺って、色をのせる基準にします。', 'Print the <b>key block (outlines)</b> first; it guides where the colors go. ') : t('この順番では、あとから摺った色が先の濃い色を上書きして、完成図と違ってしまいます。色板は<b>淡い色から濃い色へ</b>。', 'In this order a later color prints over a darker one and the picture comes out wrong. Print colors <b>from light to dark</b>. ')}${t('正しい順番：', 'The correct order:')}</p>
+      <div class="blocks answer">${G.design.orders[0].map(l => (l === 1 ? 0 : G.st.blocks.findIndex(b => b.region && b.region.label === l))).map((k, n) => `<div class="blockcard"><img src="${th[k]}" alt=""><span>${t(`${n + 1}番目`, `#${n + 1}`)}</span></div>`).join('')}</div>
+      <div class="controls"><button class="btn primary big" id="b-retry">${t('この図からやり直す', 'Retry this print')}</button></div>
+      <div class="controls"><button class="btn" id="b-share">${t('シェア', 'Share')}</button><button class="btn" id="b-title">${t('タイトルへ', 'Title')}</button></div>`;
     $('#b-retry').onclick = withAd(() => startStage(G.idx));
     $('#b-title').onclick = withAd(toTitle);
-    $('#b-share').onclick = () => share(`浮世絵職人で第${G.idx + 1}図「${G.design.title}」まで挑戦！ 得点 ${G.total}点`);
+    $('#b-share').onclick = () => share(t(`浮世絵職人で第${G.idx + 1}図「${G.design.title}」まで挑戦！ 得点 ${G.total}点`, `I reached No.${G.idx + 1} “${W_(G.design, 'title')}” in Ukiyo-e Printer! Score ${G.total}`));
     offerRetry();
   }
   /* リワード広告：順番をまちがえた版を摺る前に戻ってやり直す（1ゲーム5回まで）。
@@ -317,7 +319,7 @@
       if (P.phase !== 'over') return;
       const box = document.createElement('div');
       box.className = 'retry-offer';
-      box.innerHTML = `<button class="btn primary big" id="b-reward">広告を見て、この版の前からやり直す</button><small>残り ${MAX_RETRIES - G.retries} 回</small>`;
+      box.innerHTML = `<button class="btn primary big" id="b-reward">${t('広告を見て、この版の前からやり直す', 'Watch an ad to undo this block')}</button><small>${t(`残り ${MAX_RETRIES - G.retries} 回`, `${MAX_RETRIES - G.retries} left`)}</small>`;
       panel.prepend(box);
       $('#b-reward').onclick = async () => {
         box.remove();
@@ -335,32 +337,32 @@
     FX.t0 = -1e9; FX.stay = false;
     G.retries++; P.undos = (P.undos || 0) + 1;
     P.phase = 'pick'; P.view = 0; P.pickFor = -1;
-    toast(`やり直し（${G.retries}回目）`, 'good');
+    toast(t(`やり直し（${G.retries}回目）`, `Retry (${G.retries})`), 'good');
     panelPick();
   }
   /* シェア：アプリでは Android の共有メニュー、Web では共有 API か X（旧 Twitter） */
   async function share(text) {
     const url = SHARE_URL;
     const nativeShare = plugin('Share');
-    if (nativeShare) { try { await nativeShare.share({ title: '浮世絵職人', text, url, dialogTitle: 'シェア' }); } catch (e) { /* キャンセル */ } }
-    else if (navigator.share) { try { await navigator.share({ title: '浮世絵職人', text, url }); } catch (e) { /* キャンセル */ } }
+    if (nativeShare) { try { await nativeShare.share({ title: t('浮世絵職人', 'Ukiyo-e Printer'), text, url, dialogTitle: t('シェア', 'Share') }); } catch (e) { /* キャンセル */ } }
+    else if (navigator.share) { try { await navigator.share({ title: t('浮世絵職人', 'Ukiyo-e Printer'), text, url }); } catch (e) { /* キャンセル */ } }
     else window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`, '_blank');
   }
   function ending() {
     P.phase = 'end'; pref(PREF, '0');
     const best = +(pref(HIKEY) || 0), isBest = G.total > best;
     if (isBest) pref(HIKEY, String(G.total));
-    fx('免許皆伝', `全${STAGES.length}図 摺り上がり　総得点 ${G.total}点`, true, '#ffd75a', true);
-    panel.innerHTML = `<div class="role"><span class="role-seal">極</span>全図クリア</div>
-      <h2>全${STAGES.length}図 摺り上がり</h2>
-      <p class="howto">総得点 <b>${G.total}</b> 点。${isBest ? '<b>ハイスコア更新！</b>' : `ハイスコアは ${best} 点。`}</p>
-      <div class="controls"><button class="btn primary big" id="b-again">最初から遊ぶ</button></div>
-      ${G.retries ? `<p class="note">やり直し ${G.retries}回</p>` : ''}
-      <div class="controls"><button class="btn" id="b-share">シェア</button><button class="btn" id="b-gal">画廊を見る</button><button class="btn" id="b-title">タイトルへ</button></div>`;
+    fx(t('免許皆伝', 'MASTER PRINTER'), t(`全${STAGES.length}図 摺り上がり　総得点 ${G.total}点`, `All ${STAGES.length} prints done  Total ${G.total}`), true, '#ffd75a', true);
+    panel.innerHTML = `<div class="role"><span class="role-seal">極</span>${t('全図クリア', 'All cleared')}</div>
+      <h2>${t(`全${STAGES.length}図 摺り上がり`, `All ${STAGES.length} prints done`)}</h2>
+      <p class="howto">${t(`総得点 <b>${G.total}</b> 点。`, `Total score <b>${G.total}</b>. `)}${isBest ? t('<b>ハイスコア更新！</b>', '<b>New high score!</b>') : t(`ハイスコアは ${best} 点。`, `High score: ${best}.`)}</p>
+      <div class="controls"><button class="btn primary big" id="b-again">${t('最初から遊ぶ', 'Play again')}</button></div>
+      ${G.retries ? `<p class="note">${t(`やり直し ${G.retries}回`, `Retries: ${G.retries}`)}</p>` : ''}
+      <div class="controls"><button class="btn" id="b-share">${t('シェア', 'Share')}</button><button class="btn" id="b-gal">${t('画廊を見る', 'Gallery')}</button><button class="btn" id="b-title">${t('タイトルへ', 'Title')}</button></div>`;
     $('#b-again').onclick = withAd(() => newGame(0));
     $('#b-gal').onclick = showGallery;
     $('#b-title').onclick = withAd(toTitle);
-    $('#b-share').onclick = () => share(`浮世絵職人で全${STAGES.length}図を摺り上げた！ 総得点 ${G.total}点${G.retries ? `（やり直し ${G.retries}回）` : ''}`);
+    $('#b-share').onclick = () => share(t(`浮世絵職人で全${STAGES.length}図を摺り上げた！ 総得点 ${G.total}点${G.retries ? `（やり直し ${G.retries}回）` : ''}`, `I printed all ${STAGES.length} masterpieces in Ukiyo-e Printer! Total ${G.total}`));
   }
 
   /* ───────── 描画 ───────── */
@@ -371,13 +373,13 @@
       g.shadowColor = 'rgba(0,0,0,0.45)'; g.shadowBlur = 16; g.shadowOffsetY = 5;
       g.drawImage(P.goal, PAPER.x, PAPER.y, PAPER.w, PAPER.h); g.shadowColor = 'transparent';
       g.fillStyle = '#c8442f'; g.fillRect(PAPER.x, PAPER.y, 86, 26);
-      g.fillStyle = '#fff'; g.font = `700 15px ${R.FONT}`; g.fillText('お手本', PAPER.x + 12, PAPER.y + 13);
+      g.fillStyle = '#fff'; g.font = `700 15px ${R.FONT}`; g.fillText(t('お手本', 'Model'), PAPER.x + 12, PAPER.y + 13);
     } else {
       const gw = W * 0.36, gh = gw * P.goal.height / P.goal.width, gx = W - gw - 4, gy = 4;
       g.shadowColor = 'rgba(0,0,0,0.5)'; g.shadowBlur = 10; g.drawImage(P.goal, gx, gy, gw, gh); g.shadowColor = 'transparent';
       g.strokeStyle = '#c8442f'; g.lineWidth = 2.5; g.strokeRect(gx, gy, gw, gh);
       g.fillStyle = '#c8442f'; g.fillRect(gx, gy + gh, 60, 18);
-      g.fillStyle = '#fff'; g.font = `700 12px ${R.FONT}`; g.fillText('お手本', gx + 8, gy + gh + 9);
+      g.fillStyle = '#fff'; g.font = `700 12px ${R.FONT}`; g.fillText(t('お手本', 'Model'), gx + 8, gy + gh + 9);
     }
     g.restore();
   }
@@ -395,8 +397,8 @@
         g.drawImage(P.layers[k], 0, 0, W, H); g.restore();
       }
       const left = pickLeft(), f = $('#pk-time'), bt = $('#pk-bonus');
-      if (f) { f.style.width = left / PICK_SEC * 100 + '%'; f.classList.toggle('low', left < 5); bt.textContent = left > 0 ? `早さボーナス +${Math.round(50 * left / PICK_SEC)}` : '時間切れ（ボーナスなし）'; }
-      const label = P.picked.length ? `いまの摺り（${P.picked.length}版）＋この版` : 'まっさらな紙＋この版';
+      if (f) { f.style.width = left / PICK_SEC * 100 + '%'; f.classList.toggle('low', left < 5); bt.textContent = left > 0 ? t(`早さボーナス +${Math.round(50 * left / PICK_SEC)}`, `Speed bonus +${Math.round(50 * left / PICK_SEC)}`) : t('時間切れ（ボーナスなし）', 'Time up (no bonus)'); }
+      const label = P.picked.length ? t(`いまの摺り（${P.picked.length}版）＋この版`, `Paper so far (${P.picked.length}) + this block`) : t('まっさらな紙＋この版', 'Blank paper + this block');
       g.save(); g.font = `700 14px ${R.FONT}`; const tw = g.measureText(label).width + 20;
       g.fillStyle = 'rgba(36,32,29,0.85)'; g.fillRect(PAPER.x, PAPER.y, tw, 24);
       g.fillStyle = '#fff'; g.textBaseline = 'middle'; g.textAlign = 'left'; g.fillText(label, PAPER.x + 10, PAPER.y + 12); g.restore();
@@ -427,10 +429,10 @@
       } else if (!P.started) {
         g.save(); g.fillStyle = 'rgba(36,32,29,0.8)'; g.fillRect(W / 2 - 120, H / 2 - 18, 240, 36);
         g.fillStyle = '#fff'; g.font = `700 15px ${R.FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle';
-        g.fillText('紙をこすって摺ろう', W / 2, H / 2); g.restore();
+        g.fillText(t('紙をこすって摺ろう', 'Rub the paper to print'), W / 2, H / 2); g.restore();
       }
-      const m = covMean(), f = $('#sr-fill'), t = $('#sr-txt');
-      if (f) { f.style.width = Math.min(100, m * 100) + '%'; t.textContent = `摺れ具合 ${Math.round(m * 100)}%`; }
+      const m = covMean(), f = $('#sr-fill'), tx = $('#sr-txt');
+      if (f) { f.style.width = Math.min(100, m * 100) + '%'; tx.textContent = t(`摺れ具合 ${Math.round(m * 100)}%`, `Printed ${Math.round(m * 100)}%`); }
     }
   }
 
@@ -503,7 +505,7 @@
     if (!P.finalCv) return false;
     const w = 360, h = Math.round(w * P.finalCv.height / P.finalCv.width);
     const c = U.canvas(w, h); c.getContext('2d').drawImage(P.finalCv, 0, 0, w, h);
-    const item = { id: Date.now(), title: G.design.title, artist: G.design.artist, score, date: new Date().toLocaleDateString('ja-JP'), img: c.toDataURL('image/jpeg', 0.82) };
+    const item = { id: Date.now(), title: W_(G.design, 'title'), artist: W_(G.design, 'artist'), score, date: new Date().toLocaleDateString(I18N.en ? 'en-US' : 'ja-JP'), img: c.toDataURL('image/jpeg', 0.82) };
     const list = loadGallery(); list.unshift(item);
     while (list.length) {
       try { localStorage.setItem(GKEY, JSON.stringify(list.slice(0, 24))); return true; }
@@ -515,12 +517,12 @@
     clearTimeout(P.timer);
     const list = loadGallery(), box = $('#gallery-list');
     box.innerHTML = list.length ? list.map(it => `<figure data-id="${it.id}"><img src="${it.img}" alt="${esc(it.title)}">
-      <figcaption><b>${esc(it.title)}</b>${esc(it.artist || '')}<br><small>${it.score}点・${esc(it.date)}</small>
-      <button class="del" data-del="${it.id}" aria-label="削除">✕</button></figcaption></figure>`).join('')
-      : '<p class="empty">まだ作品がありません。浮世絵を摺り上げると、ここに飾られます。</p>';
+      <figcaption><b>${esc(it.title)}</b>${esc(it.artist || '')}<br><small>${t(`${it.score}点`, `${it.score} pts`)}・${esc(it.date)}</small>
+      <button class="del" data-del="${it.id}" aria-label="${t('削除', 'Delete')}">✕</button></figcaption></figure>`).join('')
+      : `<p class="empty">${t('まだ作品がありません。浮世絵を摺り上げると、ここに飾られます。', 'No prints yet. Your finished prints will hang here.')}</p>`;
     box.querySelectorAll('[data-del]').forEach(b => b.onclick = (e) => {
       e.stopPropagation();
-      if (!confirm('この作品を画廊から外しますか？')) return;
+      if (!confirm(t('この作品を画廊から外しますか？', 'Remove this print from the gallery?'))) return;
       localStorage.setItem(GKEY, JSON.stringify(loadGallery().filter(x => String(x.id) !== b.dataset.del))); showGallery();
     });
     box.querySelectorAll('figure').forEach(f => f.onclick = () => {
@@ -535,7 +537,7 @@
   const ZKEY = 'ukiyoe-shokunin-zukan';
   function loadZukan() { try { return JSON.parse(localStorage.getItem(ZKEY) || '{}'); } catch (e) { return {}; } }
   function recordZukan(score) {
-    const z = loadZukan(), id = G.design.id, e = z[id] || { best: 0, count: 0, date: new Date().toLocaleDateString('ja-JP') };
+    const z = loadZukan(), id = G.design.id, e = z[id] || { best: 0, count: 0, date: new Date().toLocaleDateString(I18N.en ? 'en-US' : 'ja-JP') };
     e.best = Math.max(e.best, score); e.count++;
     z[id] = e; try { localStorage.setItem(ZKEY, JSON.stringify(z)); } catch (err) { /* 保存できなくても続ける */ }
   }
@@ -545,14 +547,16 @@
     $('#zukan-count').textContent = `${STAGES.filter(d => z[d.id]).length} / ${STAGES.length}`;
     box.innerHTML = STAGES.map((d, i) => {
       const e = z[d.id];
-      if (!e) return `<figure class="locked"><div class="lock">？</div><figcaption><b><span class="no">第${i + 1}図</span>？？？</b>まだ摺り上げていません</figcaption></figure>`;
-      return `<figure data-i="${i}"><img src="${d.raster.image}" alt="${esc(d.title)}" loading="lazy">
-        <figcaption><b><span class="no">第${i + 1}図</span>${esc(d.title)}</b>${esc(d.artist)}${d.series ? `『${esc(d.series)}』` : ''}<br><small>${esc(d.genre || '')}・版${d.regions.length + 1}枚・最高${e.best}点・${e.count}回</small></figcaption></figure>`;
+      if (!e) return `<figure class="locked"><div class="lock">？</div><figcaption><b><span class="no">${t(`第${i + 1}図`, `No.${i + 1}`)}</span>？？？</b>${t('まだ摺り上げていません', 'Not printed yet')}</figcaption></figure>`;
+      const ser = W_(d, 'series'), nb = d.regions.length + 1;
+      return `<figure data-i="${i}"><img src="${d.raster.image}" alt="${esc(W_(d, 'title'))}" loading="lazy">
+        <figcaption><b><span class="no">${t(`第${i + 1}図`, `No.${i + 1}`)}</span>${esc(W_(d, 'title'))}</b>${esc(W_(d, 'artist'))}${ser ? t(`『${esc(ser)}』`, `, ${esc(ser)}`) : ''}<br><small>${esc(W_(d, 'genre'))}・${t(`版${nb}枚・最高${e.best}点・${e.count}回`, `${nb} blocks・best ${e.best}・played ${e.count}`)}</small></figcaption></figure>`;
     }).join('');
     box.querySelectorAll('figure[data-i]').forEach(f => f.onclick = () => {
       const d = STAGES[+f.dataset.i];
       $('#viewer img').src = d.raster.image;
-      $('#viewer .viewer-cap').innerHTML = `<b>${esc(d.title)}</b>（${esc(d.yomi || '')}）<br>${esc(d.artist)}${d.series ? `『${esc(d.series)}』` : ''}・${esc(d.genre || '')}<br><small>${esc(d.credit)}</small>`;
+      const ser = W_(d, 'series');
+      $('#viewer .viewer-cap').innerHTML = `<b>${esc(W_(d, 'title'))}</b>（${esc(W_(d, 'yomi'))}）<br>${esc(W_(d, 'artist'))}${ser ? t(`『${esc(ser)}』`, `, ${esc(ser)}`) : ''}・${esc(W_(d, 'genre'))}<br><small>${esc(W_(d, 'credit'))}</small>`;
       $('#viewer').classList.add('open');
     });
     G.playing = false; G.design = null; stageBar(); show('screen-zukan');
@@ -563,8 +567,8 @@
     clearTimeout(P.timer); FX.t0 = -1e9; FX.stay = false; G.playing = false; G.design = null; stageBar();
     const saved = +(pref(PREF) || 0), cont = $('#btn-continue');
     cont.hidden = !(saved > 0 && saved < STAGES.length);
-    cont.textContent = `つづきから（第${saved + 1}図）`;
-    const best = +(pref(HIKEY) || 0), hb = $('#hiscore'); if (hb) hb.textContent = best ? `ハイスコア ${best}点` : '';
+    cont.textContent = t(`つづきから（第${saved + 1}図）`, `Continue (No.${saved + 1})`);
+    const best = +(pref(HIKEY) || 0), hb = $('#hiscore'); if (hb) hb.textContent = best ? t(`ハイスコア ${best}点`, `High score ${best}`) : '';
     show('screen-title');
   }
   const newGame = i => { Sfx.init(); G.total = 0; G.combo = 0; G.retries = 0; startStage(i); };
