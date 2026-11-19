@@ -15,6 +15,7 @@
   <button class="brand" id="btn-home" title="表題へ"><span class="brand-seal">浮</span><span class="brand-text">浮世絵職人</span></button>
   <div class="stagebar" id="stagebar"></div>
   <div class="top-actions">
+    <button class="btn small" id="btn-zukan">図鑑</button>
     <button class="btn small" id="btn-gallery">画廊</button>
     <button class="btn small" id="btn-bgm" aria-pressed="true" title="BGM">♪<span class="hide-sm"> BGM</span></button>
     <button class="btn small" id="btn-sound" aria-pressed="true" title="効果音"><span class="hide-sm">効果</span>音</button>
@@ -31,7 +32,7 @@
         <button class="btn big" id="btn-continue" hidden>つづきから</button>
       </div>
       <p class="hiscore" id="hiscore"></p>
-      <p class="howto-link"><button class="btn" id="btn-howto">遊び方</button></p>
+      <p class="howto-link"><button class="btn" id="btn-howto">遊び方</button> <button class="btn" id="btn-zukan2">図鑑</button></p>
     </div>
     <footer class="foot">作品はすべてメトロポリタン美術館が公開するパブリックドメイン（CC0）の原画を色分解して版にしています。
       <span class="legal"><span id="buildInfo"></span> <a href="https://techgym.jp/privacy-policy/" target="_blank" rel="noopener">プライバシーポリシー</a><span id="adPrivacy" hidden>｜<a href="#" id="adPrivacyLink">広告の設定</a></span></span></footer>
@@ -70,12 +71,17 @@
     <aside id="panel" class="panel"></aside>
   </section>
 
+  <section id="screen-zukan" class="screen">
+    <div class="gal-head"><h2 class="sec">図鑑 <small id="zukan-count"></small></h2><button class="btn" id="btn-zukan-back">表題へ戻る</button></div>
+    <p class="note">一度摺り上げた浮世絵が載ります。</p>
+    <div id="zukan-list" class="gallery zukan"></div>
+  </section>
   <section id="screen-gallery" class="screen">
     <div class="gal-head"><h2 class="sec">画廊</h2><button class="btn" id="btn-gallery-back">表題へ戻る</button></div>
     <div id="gallery-list" class="gallery"></div>
   </section>
 </main>
-<div id="viewer"><img alt="作品"></div>
+<div id="viewer"><img alt="作品"><p class="viewer-cap"></p></div>
 <div id="pause" class="overlay" hidden>
   <div class="overlay-box">
     <h2>一時停止</h2>

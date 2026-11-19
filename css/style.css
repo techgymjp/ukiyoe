@@ -30,7 +30,7 @@ button { font-family: inherit; white-space: nowrap; }
 .steps li.done { color: rgba(241,230,207,.8); }
 .steps li.active { color: var(--paper); background: var(--shu); }
 .steps li.active span { border-color: var(--paper); }
-body[data-screen="screen-title"] .steps, body[data-screen="screen-gallery"] .steps { visibility: hidden; }
+body[data-screen="screen-title"] .steps, body[data-screen="screen-gallery"] .steps, body[data-screen="screen-zukan"] .steps { visibility: hidden; }
 .top-actions { display: flex; gap: 6px; }
 
 /* ボタン */
@@ -144,7 +144,7 @@ body[data-screen="screen-title"] .steps, body[data-screen="screen-gallery"] .ste
 .hanmoto { background: rgba(31,58,104,.08); border-radius: 6px; padding: 10px 12px; }
 
 /* 画廊 */
-#screen-gallery { max-width: 1100px; margin: 0 auto; padding: 8px 16px 40px; }
+#screen-gallery, #screen-zukan { max-width: 1100px; margin: 0 auto; padding: 8px 16px 40px; }
 .gal-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 18px; }
 .gallery figure { margin: 0; background: #3a332c; padding: 12px 12px 0; border-radius: 6px; cursor: zoom-in; }
@@ -154,7 +154,16 @@ body[data-screen="screen-title"] .steps, body[data-screen="screen-gallery"] .ste
 .gallery .del { position: absolute; right: 0; top: 8px; background: none; border: 0; color: var(--paper); opacity: .6; cursor: pointer; font-size: 14px; }
 .empty { color: var(--ink2); }
 #viewer { position: fixed; inset: 0; z-index: 50; background: rgba(20,16,12,.88); display: none; place-items: center; padding: 16px; cursor: zoom-out; }
-#viewer.open { display: grid; }
+#viewer.open { display: grid; grid-template-rows: minmax(0, 1fr) auto; gap: 10px; }
+#viewer img { min-height: 0; justify-self: center; align-self: center; }
+.viewer-cap { margin: 0; color: var(--paper); text-align: center; font-size: 14px; line-height: 1.6; }
+.viewer-cap:empty { display: none; }
+.viewer-cap b { font-size: 17px; }
+.zukan { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px; }
+.zukan figure.locked { cursor: default; }
+.zukan .lock { aspect-ratio: 3 / 4; display: grid; place-items: center; background: #26211c; color: #6d6156; font-size: 44px; font-weight: 800; box-shadow: inset 0 0 0 2px #4a4038; }
+.zukan .no { display: inline-block; background: var(--shu); color: #fff8ec; border-radius: 4px; padding: 0 6px; margin-right: 6px; font-size: 12px; }
+.zukan img { aspect-ratio: auto; max-height: 220px; object-fit: contain; background: #26211c; }
 #viewer img { max-width: 100%; max-height: 100%; box-shadow: 0 10px 40px rgba(0,0,0,.6); }
 
 /* スマホ */
@@ -282,7 +291,7 @@ a.brand { text-decoration: none; }
 .hiscore { text-align: center; font-weight: 700; color: var(--shu-d); margin: 0 0 10px; min-height: 1em; }
 
 /* Android アプリ：バナー広告の余白・一時停止・タイトルの表記 */
-#screen-title, #screen-howto, #screen-gallery { padding-bottom: calc(16px + var(--banner-h, 0px)); }
+#screen-title, #screen-howto, #screen-gallery, #screen-zukan { padding-bottom: calc(16px + var(--banner-h, 0px)); }
 body.is-result #screen-work.active { padding-bottom: calc(8px + var(--banner-h, 0px)); }
 .legal { display: block; margin-top: 8px; }
 .legal a { color: inherit; }
@@ -325,3 +334,6 @@ body.playing .pausebtn { display: block; }
 /* ヘッダーの高さを固定（中身が折り返して高くなり、作業画面がはみ出さないように） */
 .topbar { box-sizing: border-box; overflow: hidden; }
 .stagebar { min-width: 0; overflow: hidden; }
+
+/* 狭い画面では上部の「図鑑」は出さない（タイトル画面のボタンから開く） */
+@media (max-width: 480px) { #btn-zukan { display: none; } }

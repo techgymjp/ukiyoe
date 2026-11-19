@@ -275,7 +275,7 @@
     fx(perfect ? 'PERFECT!' : 'CLEAR!', perfect ? `見事！ ${score}点` : `${score}点　${why}`, perfect);
     Sfx.play('fanfare');
     P.finalCv = R.render(G.design, G.st, { S: 2, order: P.picked });
-    saveGallery(score);
+    saveGallery(score); recordZukan(score);
     const last = G.idx + 1 >= STAGES.length;
     panel.innerHTML = `<div class="role"><span class="role-seal">完</span>第${G.idx + 1}図 クリア</div>
       <h2>${G.design.title}<span class="yomi">${G.design.artist}</span></h2>
@@ -525,11 +525,38 @@
     });
     box.querySelectorAll('figure').forEach(f => f.onclick = () => {
       const it = list.find(x => String(x.id) === f.dataset.id);
-      $('#viewer img').src = it.img; $('#viewer').classList.add('open');
+      $('#viewer img').src = it.img; $('#viewer .viewer-cap').textContent = ''; $('#viewer').classList.add('open');
     });
     G.playing = false; show('screen-gallery');
   }
   $('#viewer').onclick = () => $('#viewer').classList.remove('open');
+
+  /* ───────── 図鑑：一度摺り上げた浮世絵 ───────── */
+  const ZKEY = 'ukiyoe-shokunin-zukan';
+  function loadZukan() { try { return JSON.parse(localStorage.getItem(ZKEY) || '{}'); } catch (e) { return {}; } }
+  function recordZukan(score) {
+    const z = loadZukan(), id = G.design.id, e = z[id] || { best: 0, count: 0, date: new Date().toLocaleDateString('ja-JP') };
+    e.best = Math.max(e.best, score); e.count++;
+    z[id] = e; try { localStorage.setItem(ZKEY, JSON.stringify(z)); } catch (err) { /* 保存できなくても続ける */ }
+  }
+  function showZukan() {
+    clearTimeout(P.timer);
+    const z = loadZukan(), box = $('#zukan-list');
+    $('#zukan-count').textContent = `${STAGES.filter(d => z[d.id]).length} / ${STAGES.length}`;
+    box.innerHTML = STAGES.map((d, i) => {
+      const e = z[d.id];
+      if (!e) return `<figure class="locked"><div class="lock">？</div><figcaption><b><span class="no">第${i + 1}図</span>？？？</b>まだ摺り上げていません</figcaption></figure>`;
+      return `<figure data-i="${i}"><img src="${d.raster.image}" alt="${esc(d.title)}" loading="lazy">
+        <figcaption><b><span class="no">第${i + 1}図</span>${esc(d.title)}</b>${esc(d.artist)}${d.series ? `『${esc(d.series)}』` : ''}<br><small>${esc(d.genre || '')}・版${d.regions.length + 1}枚・最高${e.best}点・${e.count}回</small></figcaption></figure>`;
+    }).join('');
+    box.querySelectorAll('figure[data-i]').forEach(f => f.onclick = () => {
+      const d = STAGES[+f.dataset.i];
+      $('#viewer img').src = d.raster.image;
+      $('#viewer .viewer-cap').innerHTML = `<b>${esc(d.title)}</b>（${esc(d.yomi || '')}）<br>${esc(d.artist)}${d.series ? `『${esc(d.series)}』` : ''}・${esc(d.genre || '')}<br><small>${esc(d.credit)}</small>`;
+      $('#viewer').classList.add('open');
+    });
+    G.playing = false; G.design = null; stageBar(); show('screen-zukan');
+  }
 
   /* ───────── タイトル ───────── */
   function toTitle() {
@@ -554,6 +581,9 @@
   $('#btn-home').onclick = () => { if (G.playing && ['intro', 'pick', 'rub'].includes(P.phase)) { setPaused(true); return; } Ads.showInterstitial().then(toTitle); };
   $('#btn-gallery').onclick = () => { if (G.playing && ['intro', 'pick', 'rub'].includes(P.phase)) { setPaused(true); return; } showGallery(); };
   $('#btn-gallery-back').onclick = toTitle;
+  const openZukan = () => { if (G.playing && ['intro', 'pick', 'rub'].includes(P.phase)) { setPaused(true); return; } Sfx.play('tap'); showZukan(); };
+  $('#btn-zukan').onclick = openZukan; $('#btn-zukan2').onclick = openZukan;
+  $('#btn-zukan-back').onclick = toTitle;
 
   /* ───────── 一時停止・戻るボタン・広告の出る画面 ───────── */
   let pausedAt = 0;
@@ -580,19 +610,19 @@
     if (document.hidden) { setPaused(true); Sfx.suspend(); }
     else Sfx.resume();
   });
-  // Android の戻るボタン：プレイ中は一時停止、一時停止中は再開、遊び方・画廊はタイトルへ、タイトル・結果画面ではアプリを閉じる
+  // Android の戻るボタン：プレイ中は一時停止、一時停止中は再開、遊び方・画廊・図鑑はタイトルへ、タイトル・結果画面ではアプリを閉じる
   if (plugin('App')) {
     plugin('App').addListener('backButton', () => {
       const scr = document.body.dataset.screen;
       if (!$('#pause').hidden) withAd(() => setPaused(false))();
       else if (inPlay()) setPaused(true);
       else if (scr === 'screen-howto') withAd(toTitle)();
-      else if (scr === 'screen-gallery') toTitle();
       else if ($('#viewer').classList.contains('open')) $('#viewer').classList.remove('open');
+      else if (scr === 'screen-gallery' || scr === 'screen-zukan') toTitle();
       else plugin('App').exitApp();
     });
   }
-  // バナーはタイトル・遊び方・画廊・一時停止・結果の画面だけ（プレイ中は出さない）
+  // バナーはタイトル・遊び方・画廊・図鑑・一時停止・結果の画面だけ（プレイ中は出さない）
   function syncUi() {
     const play = inPlay() && $('#pause').hidden;
     const result = document.body.dataset.screen === 'screen-work' && ['clear', 'over', 'end'].includes(P.phase);
